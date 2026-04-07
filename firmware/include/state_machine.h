@@ -1,0 +1,31 @@
+#ifndef STATE_MACHINE_H
+#define STATE_MACHINE_H
+
+#include <stdbool.h>
+#include "firmware_types.h"
+#include "security_policy.h"
+
+typedef struct {
+    device_state_t state;
+    bool unlocked;
+    unsigned int failed_pin_attempts;
+    unsigned int inactivity_seconds;
+    unsigned int selected_credential_idx;
+} device_context_t;
+
+void state_machine_init(device_context_t *ctx);
+void state_machine_tick(device_context_t *ctx);
+void state_machine_on_touch_tap(device_context_t *ctx);
+void state_machine_on_touch_hold(device_context_t *ctx);
+bool state_machine_try_unlock(device_context_t *ctx, const char *pin);
+bool state_machine_request_fill(
+    device_context_t *ctx,
+    const credential_record_t *record,
+    const char *origin
+);
+bool state_machine_request_save(
+    device_context_t *ctx,
+    const credential_record_t *record
+);
+
+#endif

@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.13)
+project(rp2040_password_key_firmware C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+add_library(firmware_core
+  src/state_machine.c
+  src/password_policy.c
+  src/password_generator.c
+  src/browser_protocol.c
+  src/common_passwords.c
+  src/vault.c
+)
+
+target_include_directories(firmware_core
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+add_executable(firmware_tests
+  tests/test_main.c
+)
+
+target_link_libraries(firmware_tests
+  PRIVATE firmware_core
+)
+
+enable_testing()
+add_test(NAME firmware_tests COMMAND firmware_tests)
