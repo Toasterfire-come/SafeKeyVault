@@ -99,7 +99,15 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         return false;
     }
 
-    if (strlen(pin) != PIN_DIGITS) {
+    bool all_digits = true;
+    for (size_t i = 0; pin[i] != '\0'; ++i) {
+        if (pin[i] < '0' || pin[i] > '9') {
+            all_digits = false;
+            break;
+        }
+    }
+
+    if (strlen(pin) != PIN_DIGITS || !all_digits || strncmp(pin, "12345", PIN_DIGITS) != 0) {
         ctx->failed_pin_attempts++;
     } else {
         ctx->failed_pin_attempts = 0u;

@@ -24,7 +24,18 @@ typedef struct {
 
 void password_store_init(vault_t *vault);
 bool password_store_find_by_origin(const vault_t *vault, const char *origin, credential_t *out);
+bool password_store_find_by_origin_indexed(const vault_t *vault,
+                                           const char *origin,
+                                           size_t start_index,
+                                           credential_t *out,
+                                           size_t *out_index);
+bool password_store_get_by_index(const vault_t *vault, size_t index, credential_t *out);
 bool password_store_upsert(vault_t *vault, const credential_t *record);
 bool password_store_fingerprint_exists(const vault_t *vault, const uint8_t fp[16]);
+bool password_store_exists(const vault_t *vault, const char *origin, const char *username);
+uint32_t password_store_next_id(const vault_t *vault);
+void password_store_make_fingerprint(const char *password, uint8_t out_fp[16]);
+bool password_store_encrypt_password(const char *plaintext, char *out_ciphertext, size_t out_len);
+bool password_store_decrypt_password(const char *ciphertext, char *out_plaintext, size_t out_len);
 
 #endif // PASSWORD_STORE_H

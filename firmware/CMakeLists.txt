@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 add_library(firmware_core
+  src/action_engine.c
+  src/crypto_stub.c
   src/state_machine.c
   src/password_policy.c
   src/password_generator.c

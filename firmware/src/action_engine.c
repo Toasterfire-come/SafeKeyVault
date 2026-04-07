@@ -1,0 +1,369 @@
+#include "action_engine.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "browser_protocol.h"
+#include "crypto_stub.h"
+#include "password_generator.h"
+#include "password_store.h"
+#include "security_policy.h"
+#include "state_machine.h"
+
+static uint32_t g_action_clock = 1u;
+
+static void clear_pending(pending_request_t *pending) {
+  if (pending == NULL) {
+    return;
+  }
+  memset(pending, 0, sizeof(*pending));
+  pending->kind = ACTION_NONE;
+}
+
+static bool is_engine_ready(const action_engine_t *engine) {
+  return engine != NULL && engine->vault != NULL && engine->ctx != NULL;
+}
+
+static bool load_record_plaintext(const credential_t *entry, credential_record_t *out) {
+  if (entry == NULL || out == NULL) {
+    return false;
+  }
+  memset(out, 0, sizeof(*out));
+  (void)strncpy(out->origin, entry->origin, sizeof(out->origin) - 1u);
+  (void)strncpy(out->username, entry->username, sizeof(out->username) - 1u);
+  if (!crypto_stub_decrypt_password(entry->password_ciphertext, out->password, sizeof(out->password))) {
+    return false;
+  }
+  out->updated_at_epoch = entry->updated_at;
+  out->requires_touch = true;
+  return true;
+}
+
+static bool stash_record(const credential_record_t *record, credential_t *out_entry) {
+  if (record == NULL || out_entry == NULL) {
+    return false;
+  }
+  memset(out_entry, 0, sizeof(*out_entry));
+  out_entry->valid = true;
+  (void)strncpy(out_entry->origin, record->origin, sizeof(out_entry->origin) - 1u);
+  (void)strncpy(out_entry->username, record->username, sizeof(out_entry->username) - 1u);
+  if (!crypto_stub_encrypt_password(record->password, out_entry->password_ciphertext,
+                                    sizeof(out_entry->password_ciphertext))) {
+    return false;
+  }
+  out_entry->created_at = record->updated_at_epoch;
+  out_entry->updated_at = record->updated_at_epoch;
+  crypto_stub_password_fingerprint(record->password, out_entry->password_fingerprint, 16u);
+  return true;
+}
+
+void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_t *ctx) {
+  if (engine == NULL) {
+    return;
+  }
+  memset(engine, 0, sizeof(*engine));
+  engine->vault = vault;
+  engine->ctx = ctx;
+  clear_pending(&engine->pending);
+}
+
+bool action_engine_handle_command(action_engine_t *engine,
+                                  const BrowserCommand *cmd,
+                                  ActionResult *out) {
+  BrowserCommandResult browser_result;
+  credential_t entry;
+  credential_record_t rec;
+  password_policy_result_t policy;
+  uint8_t seed[16];
+  size_t generated_len;
+
+  if (!is_engine_ready(engine) || cmd == NULL || out == NULL) {
+    return false;
+  }
+  memset(out, 0, sizeof(*out));
+
+  if (!engine->ctx->unlocked || engine->ctx->state == DEVICE_LOCKED_OUT) {
+    (void)snprintf(out->message, sizeof(out->message), "device locked");
+    return true;
+  }
+
+  if (!browser_validate_command(cmd, &browser_result)) {
+    (void)snprintf(out->message, sizeof(out->message), "%s", browser_result.message);
+    return true;
+  }
+
+  switch (cmd->type) {
+    case BROWSER_CMD_REQUEST_FILL:
+      if (!password_store_find_by_origin(engine->vault, cmd->origin, &entry)) {
+        (void)snprintf(out->message, sizeof(out->message), "no credential for origin");
+        return true;
+      }
+      if (!load_record_plaintext(&entry, &rec)) {
+        (void)snprintf(out->message, sizeof(out->message), "decrypt failed");
+        return true;
+      }
+      if (!state_machine_request_fill(engine->ctx, &rec, cmd->origin)) {
+        (void)snprintf(out->message, sizeof(out->message), "fill blocked");
+        return true;
+      }
+
+      clear_pending(&engine->pending);
+      engine->pending.kind = ACTION_PENDING_FILL;
+      engine->pending.command = *cmd;
+      engine->pending.credential = entry;
+
+      out->allowed = true;
+      out->touch_required = true;
+      out->save_prompt_recommended = false;
+      (void)snprintf(out->message, sizeof(out->message), "touch to confirm fill");
+      return true;
+
+    case BROWSER_CMD_REQUEST_SAVE:
+      memset(&rec, 0, sizeof(rec));
+      (void)strncpy(rec.origin, cmd->origin, sizeof(rec.origin) - 1u);
+      (void)strncpy(rec.username, cmd->username, sizeof(rec.username) - 1u);
+      (void)strncpy(rec.password, cmd->password, sizeof(rec.password) - 1u);
+      rec.updated_at_epoch = g_action_clock++;
+      rec.requires_touch = true;
+
+      policy = security_evaluate_password(rec.password);
+      out->weak_password_warning = (policy.strength == PASSWORD_STRENGTH_WEAK);
+      out->common_password_warning = policy.is_common;
+      out->reused_password_warning = policy.is_reused;
+      if (policy.too_short) {
+        (void)snprintf(out->message, sizeof(out->message), "password too short");
+        return true;
+      }
+
+      if (!stash_record(&rec, &entry)) {
+        (void)snprintf(out->message, sizeof(out->message), "prepare save failed");
+        return true;
+      }
+      entry.id = password_store_next_id(engine->vault);
+
+      clear_pending(&engine->pending);
+      engine->pending.kind = ACTION_PENDING_SAVE;
+      engine->pending.command = *cmd;
+      engine->pending.credential = entry;
+      engine->pending.override_with_hold = (policy.is_common || policy.is_reused);
+
+      out->allowed = true;
+      out->touch_required = true;
+      out->save_prompt_recommended = false;
+      if (engine->pending.override_with_hold) {
+        (void)snprintf(out->message, sizeof(out->message), "hold required to override warning");
+      } else {
+        (void)snprintf(out->message, sizeof(out->message), "touch to save");
+      }
+      return true;
+
+    case BROWSER_CMD_REQUEST_GENERATE:
+      memset(seed, 0, sizeof(seed));
+      for (size_t i = 0; i < sizeof(seed); ++i) {
+        seed[i] = (uint8_t)(cmd->origin[i % sizeof(cmd->origin)] + (uint8_t)i + 31u);
+      }
+      memset(&rec, 0, sizeof(rec));
+      (void)strncpy(rec.origin, cmd->origin, sizeof(rec.origin) - 1u);
+      (void)strncpy(rec.username, cmd->username, sizeof(rec.username) - 1u);
+      generated_len = password_generate(PASSWORD_PROFILE_STRONG, seed, sizeof(seed),
+                                        rec.password, sizeof(rec.password));
+      if (generated_len < PASSWORD_MIN_LENGTH) {
+        (void)snprintf(out->message, sizeof(out->message), "generation failed");
+        return true;
+      }
+      rec.updated_at_epoch = g_action_clock++;
+      rec.requires_touch = true;
+
+      if (!stash_record(&rec, &entry)) {
+        (void)snprintf(out->message, sizeof(out->message), "prepare generated save failed");
+        return true;
+      }
+      entry.id = password_store_next_id(engine->vault);
+
+      clear_pending(&engine->pending);
+      engine->pending.kind = ACTION_PENDING_GENERATE;
+      engine->pending.command = *cmd;
+      engine->pending.credential = entry;
+
+      out->allowed = true;
+      out->touch_required = true;
+      out->generated_password = true;
+      out->save_prompt_recommended = true;
+      (void)strncpy(out->generated_value, rec.password, sizeof(out->generated_value) - 1u);
+      (void)snprintf(out->message, sizeof(out->message), "touch to save generated password");
+      return true;
+
+    case BROWSER_CMD_REQUEST_SELECT_NEXT:
+      if (engine->vault->count == 0u) {
+        (void)snprintf(out->message, sizeof(out->message), "no credentials");
+        return true;
+      }
+      engine->pending.kind = ACTION_PENDING_SELECT;
+      engine->pending.pending_index =
+          (engine->ctx->selected_credential_idx + 1u) % engine->vault->count;
+      engine->ctx->state = DEVICE_SELECT_CREDENTIAL;
+
+      out->allowed = true;
+      out->touch_required = true;
+      out->selected_next = true;
+      (void)snprintf(out->message, sizeof(out->message), "hold to confirm selection");
+      return true;
+
+    default:
+      (void)snprintf(out->message, sizeof(out->message), "unsupported command");
+      return true;
+  }
+}
+
+static bool commit_pending_save(action_engine_t *engine, ActionResult *out, bool hold) {
+  bool existed;
+  char plaintext[MAX_PASSWORD_LEN];
+
+  if (engine == NULL || out == NULL) {
+    return false;
+  }
+
+  plaintext[0] = '\0';
+  if (!crypto_stub_decrypt_password(engine->pending.credential.password_ciphertext,
+                                    plaintext, sizeof(plaintext))) {
+    (void)snprintf(out->message, sizeof(out->message), "decrypt pending failed");
+    return true;
+  }
+  if (engine->pending.override_with_hold && !hold) {
+    out->touch_required = true;
+    (void)snprintf(out->message, sizeof(out->message), "hold required to save");
+    return true;
+  }
+
+  existed = password_store_exists(engine->vault,
+                                  engine->pending.credential.origin,
+                                  engine->pending.credential.username);
+  if (!password_store_upsert(engine->vault, &engine->pending.credential)) {
+    (void)snprintf(out->message, sizeof(out->message), "vault save failed");
+    return true;
+  }
+
+  out->allowed = true;
+  out->performed = true;
+  out->updated_existing_record = existed;
+  out->created_new_record = !existed;
+  (void)snprintf(out->message, sizeof(out->message), "credential saved");
+  engine->ctx->state = DEVICE_UNLOCKED;
+  clear_pending(&engine->pending);
+  return true;
+}
+
+bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out) {
+  credential_record_t rec;
+  if (!is_engine_ready(engine) || out == NULL) {
+    return false;
+  }
+  memset(out, 0, sizeof(*out));
+
+  if (engine->pending.kind == ACTION_NONE) {
+    (void)snprintf(out->message, sizeof(out->message), "no pending action");
+    return true;
+  }
+
+  state_machine_on_touch_tap(engine->ctx);
+
+  if (engine->pending.kind == ACTION_PENDING_FILL) {
+    if (engine->ctx->state == DEVICE_CONFIRM_TYPE) {
+      out->allowed = true;
+      out->touch_required = true;
+      (void)snprintf(out->message, sizeof(out->message), "tap again to type");
+      return true;
+    }
+    if (engine->ctx->state == DEVICE_UNLOCKED) {
+      if (!load_record_plaintext(&engine->pending.credential, &rec)) {
+        (void)snprintf(out->message, sizeof(out->message), "decrypt failed");
+        clear_pending(&engine->pending);
+        return true;
+      }
+      out->allowed = true;
+      out->performed = true;
+      (void)strncpy(out->typed_username, rec.username, sizeof(out->typed_username) - 1u);
+      (void)strncpy(out->typed_password, rec.password, sizeof(out->typed_password) - 1u);
+      (void)snprintf(out->message, sizeof(out->message), "typed credential");
+      clear_pending(&engine->pending);
+      return true;
+    }
+  } else if (engine->pending.kind == ACTION_PENDING_SAVE ||
+             engine->pending.kind == ACTION_PENDING_GENERATE) {
+    out->allowed = true;
+    out->touch_required = true;
+    (void)snprintf(out->message, sizeof(out->message), "hold required to save");
+    return true;
+  } else if (engine->pending.kind == ACTION_PENDING_SELECT) {
+    out->allowed = true;
+    out->touch_required = true;
+    out->selected_next = true;
+    (void)snprintf(out->message, sizeof(out->message), "hold to confirm selection");
+    return true;
+  }
+
+  (void)snprintf(out->message, sizeof(out->message), "invalid transition");
+  clear_pending(&engine->pending);
+  return true;
+}
+
+bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
+  if (!is_engine_ready(engine) || out == NULL) {
+    return false;
+  }
+  memset(out, 0, sizeof(*out));
+
+  if (engine->pending.kind == ACTION_NONE) {
+    (void)snprintf(out->message, sizeof(out->message), "no pending action");
+    return true;
+  }
+
+  state_machine_on_touch_hold(engine->ctx);
+
+  if (engine->pending.kind == ACTION_PENDING_FILL) {
+    credential_record_t rec;
+    if (!load_record_plaintext(&engine->pending.credential, &rec)) {
+      (void)snprintf(out->message, sizeof(out->message), "decrypt failed");
+      clear_pending(&engine->pending);
+      return true;
+    }
+    out->allowed = true;
+    out->performed = true;
+    (void)strncpy(out->typed_username, rec.username, sizeof(out->typed_username) - 1u);
+    (void)strncpy(out->typed_password, rec.password, sizeof(out->typed_password) - 1u);
+    (void)snprintf(out->message, sizeof(out->message), "typed credential");
+    engine->ctx->state = DEVICE_UNLOCKED;
+    clear_pending(&engine->pending);
+    return true;
+  }
+
+  if (engine->pending.kind == ACTION_PENDING_SAVE ||
+      engine->pending.kind == ACTION_PENDING_GENERATE) {
+    return commit_pending_save(engine, out, true);
+  }
+
+  if (engine->pending.kind == ACTION_PENDING_SELECT) {
+    if (!password_store_get_by_index(engine->vault, engine->pending.pending_index,
+                                     &engine->last_selected)) {
+      (void)snprintf(out->message, sizeof(out->message), "selection failed");
+      clear_pending(&engine->pending);
+      return true;
+    }
+    engine->has_last_selected = true;
+    engine->ctx->selected_credential_idx = (unsigned int)engine->pending.pending_index;
+    engine->ctx->state = DEVICE_UNLOCKED;
+    out->allowed = true;
+    out->performed = true;
+    out->selected_next = true;
+    (void)snprintf(out->message, sizeof(out->message), "credential selected");
+    clear_pending(&engine->pending);
+    return true;
+  }
+
+  (void)snprintf(out->message, sizeof(out->message), "invalid transition");
+  clear_pending(&engine->pending);
+  return true;
+}

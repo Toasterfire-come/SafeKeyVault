@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "browser_protocol.h"
+#include "action_engine.h"
 #include "password_generator.h"
 #include "password_store.h"
 #include "security_policy.h"
@@ -88,12 +89,71 @@ static void test_browser_suspicious_origin(void) {
   assert(res.touch_required);
 }
 
+static void test_action_engine_fill_save_generate_select(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out;
+  BrowserCommand cmd;
+
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(state_machine_try_unlock(&ctx, "12345"));
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://example.com", sizeof(cmd.origin) - 1);
+  strncpy(cmd.username, "alice", sizeof(cmd.username) - 1);
+  strncpy(cmd.password, "Strong#Pass9", sizeof(cmd.password) - 1);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(out.touch_required);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+  assert(vault.count == 1);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_FILL;
+  strncpy(cmd.origin, "https://example.com", sizeof(cmd.origin) - 1);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(action_engine_confirm_tap(&engine, &out));
+  assert(out.touch_required);
+  assert(action_engine_confirm_tap(&engine, &out));
+  assert(out.performed);
+  assert(strcmp(out.typed_username, "alice") == 0);
+  assert(strcmp(out.typed_password, "Strong#Pass9") == 0);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_GENERATE;
+  strncpy(cmd.origin, "https://newsite.example", sizeof(cmd.origin) - 1);
+  strncpy(cmd.username, "new_user", sizeof(cmd.username) - 1);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(out.generated_password);
+  assert(strlen(out.generated_value) >= PASSWORD_MIN_LENGTH);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+  assert(vault.count == 2);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SELECT_NEXT;
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(out.selected_next);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+  assert(out.selected_next);
+}
+
 int main(void) {
   test_policy_min_len_and_common();
   test_password_generator();
   test_vault_and_reuse_detection();
   test_state_machine_touch_gate();
   test_browser_suspicious_origin();
+  test_action_engine_fill_save_generate_select();
 
   puts("firmware tests: OK");
   return 0;
