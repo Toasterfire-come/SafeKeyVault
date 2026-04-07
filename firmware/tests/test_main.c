@@ -9,6 +9,53 @@
 #include "security_policy.h"
 #include "state_machine.h"
 
+static void test_state_machine_lockout_and_wipe(void) {
+  device_context_t ctx;
+  state_machine_init(&ctx);
+
+  for (unsigned i = 0; i < MAX_PIN_FAILURES_BEFORE_LOCKOUT; ++i) {
+    assert(!state_machine_try_unlock(&ctx, "00000"));
+  }
+  assert(ctx.state == DEVICE_LOCKED_OUT);
+  assert(state_machine_lockout_remaining(&ctx) > 0u);
+  assert(!state_machine_try_unlock(&ctx, "12345"));
+
+  while (state_machine_lockout_remaining(&ctx) > 0u) {
+    state_machine_tick(&ctx);
+  }
+  assert(ctx.state == DEVICE_LOCKED);
+  assert(state_machine_try_unlock(&ctx, "12345"));
+  assert(ctx.state == DEVICE_UNLOCKED);
+
+  state_machine_init(&ctx);
+  for (unsigned i = 0; i < MAX_PIN_FAILURES_BEFORE_WIPE; ++i) {
+    assert(!state_machine_try_unlock(&ctx, "99999"));
+    while (state_machine_lockout_remaining(&ctx) > 0u) {
+      state_machine_tick(&ctx);
+    }
+  }
+  assert(state_machine_is_wiped(&ctx));
+  assert(!state_machine_try_unlock(&ctx, "12345"));
+}
+
+static void test_state_machine_settings_roundtrip(void) {
+  runtime_settings_t in = {
+      .auto_popup_enabled = false,
+      .manual_popup_requires_touch = true,
+      .require_touch_for_fill = true,
+      .hold_required_for_selection = true,
+      .autolock_seconds = 7u,
+  };
+  runtime_settings_t out = {0};
+  state_machine_apply_settings(&in);
+  state_machine_get_settings(&out);
+  assert(out.auto_popup_enabled == in.auto_popup_enabled);
+  assert(out.manual_popup_requires_touch == in.manual_popup_requires_touch);
+  assert(out.require_touch_for_fill == in.require_touch_for_fill);
+  assert(out.hold_required_for_selection == in.hold_required_for_selection);
+  assert(out.autolock_seconds == in.autolock_seconds);
+}
+
 static void test_policy_min_len_and_common(void) {
   password_policy_result_t short_pw = security_evaluate_password("abcd123");
   assert(short_pw.too_short);
@@ -147,13 +194,65 @@ static void test_action_engine_fill_save_generate_select(void) {
   assert(out.selected_next);
 }
 
+static void test_action_engine_auto_popup_modes(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out;
+  BrowserCommand cmd;
+  runtime_settings_t settings = {
+      .auto_popup_enabled = false,
+      .manual_popup_requires_touch = true,
+      .require_touch_for_fill = true,
+      .hold_required_for_selection = true,
+      .autolock_seconds = 60u,
+  };
+
+  state_machine_apply_settings(&settings);
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(state_machine_try_unlock(&ctx, "12345"));
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://manual.example", sizeof(cmd.origin) - 1);
+  strncpy(cmd.username, "manual", sizeof(cmd.username) - 1);
+  strncpy(cmd.password, "ManualPass9!", sizeof(cmd.password) - 1);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_FILL;
+  strncpy(cmd.origin, "https://manual.example", sizeof(cmd.origin) - 1);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(!out.save_prompt_recommended);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(!out.performed);
+  assert(out.touch_required);
+  assert(strstr(out.message, "manual popup") != NULL);
+
+  settings.auto_popup_enabled = true;
+  state_machine_apply_settings(&settings);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.save_prompt_recommended);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+}
+
 int main(void) {
+  test_state_machine_lockout_and_wipe();
+  test_state_machine_settings_roundtrip();
   test_policy_min_len_and_common();
   test_password_generator();
   test_vault_and_reuse_detection();
   test_state_machine_touch_gate();
   test_browser_suspicious_origin();
   test_action_engine_fill_save_generate_select();
+  test_action_engine_auto_popup_modes();
 
   puts("firmware tests: OK");
   return 0;

@@ -74,6 +74,7 @@ bool action_engine_handle_command(action_engine_t *engine,
                                   const BrowserCommand *cmd,
                                   ActionResult *out) {
   BrowserCommandResult browser_result;
+  runtime_settings_t settings;
   credential_t entry;
   credential_record_t rec;
   password_policy_result_t policy;
@@ -85,10 +86,21 @@ bool action_engine_handle_command(action_engine_t *engine,
   }
   memset(out, 0, sizeof(*out));
 
-  if (!engine->ctx->unlocked || engine->ctx->state == DEVICE_LOCKED_OUT) {
-    (void)snprintf(out->message, sizeof(out->message), "device locked");
+  if (state_machine_is_wiped(engine->ctx)) {
+    (void)snprintf(out->message, sizeof(out->message), "device wiped");
     return true;
   }
+  if (!engine->ctx->unlocked || engine->ctx->state == DEVICE_LOCKED_OUT) {
+    unsigned int wait_ticks = state_machine_lockout_remaining(engine->ctx);
+    if (wait_ticks > 0u) {
+      (void)snprintf(out->message, sizeof(out->message), "device locked (%u ticks)", wait_ticks);
+    } else {
+      (void)snprintf(out->message, sizeof(out->message), "device locked");
+    }
+    return true;
+  }
+
+  state_machine_get_settings(&settings);
 
   if (!browser_validate_command(cmd, &browser_result)) {
     (void)snprintf(out->message, sizeof(out->message), "%s", browser_result.message);
@@ -116,9 +128,13 @@ bool action_engine_handle_command(action_engine_t *engine,
       engine->pending.credential = entry;
 
       out->allowed = true;
-      out->touch_required = true;
-      out->save_prompt_recommended = false;
-      (void)snprintf(out->message, sizeof(out->message), "touch to confirm fill");
+      out->touch_required = settings.manual_popup_requires_touch;
+      out->save_prompt_recommended = settings.auto_popup_enabled;
+      if (browser_result.high_risk_origin) {
+        (void)snprintf(out->message, sizeof(out->message), "hold to confirm high-risk fill");
+      } else {
+        (void)snprintf(out->message, sizeof(out->message), "touch to confirm fill");
+      }
       return true;
 
     case BROWSER_CMD_REQUEST_SAVE:
@@ -152,7 +168,7 @@ bool action_engine_handle_command(action_engine_t *engine,
 
       out->allowed = true;
       out->touch_required = true;
-      out->save_prompt_recommended = false;
+      out->save_prompt_recommended = settings.auto_popup_enabled;
       if (engine->pending.override_with_hold) {
         (void)snprintf(out->message, sizeof(out->message), "hold required to override warning");
       } else {
@@ -191,7 +207,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       out->allowed = true;
       out->touch_required = true;
       out->generated_password = true;
-      out->save_prompt_recommended = true;
+      out->save_prompt_recommended = settings.auto_popup_enabled;
       (void)strncpy(out->generated_value, rec.password, sizeof(out->generated_value) - 1u);
       (void)snprintf(out->message, sizeof(out->message), "touch to save generated password");
       return true;
@@ -209,6 +225,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       out->allowed = true;
       out->touch_required = true;
       out->selected_next = true;
+      out->save_prompt_recommended = false;
       (void)snprintf(out->message, sizeof(out->message), "hold to confirm selection");
       return true;
 
@@ -311,6 +328,7 @@ bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out) {
 }
 
 bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
+  runtime_settings_t settings;
   if (!is_engine_ready(engine) || out == NULL) {
     return false;
   }
@@ -321,9 +339,15 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
     return true;
   }
 
+  state_machine_get_settings(&settings);
   state_machine_on_touch_hold(engine->ctx);
 
   if (engine->pending.kind == ACTION_PENDING_FILL) {
+    if (!settings.auto_popup_enabled && settings.manual_popup_requires_touch) {
+      out->touch_required = true;
+      (void)snprintf(out->message, sizeof(out->message), "auto popup disabled; manual popup required");
+      return true;
+    }
     credential_record_t rec;
     if (!load_record_plaintext(&engine->pending.credential, &rec)) {
       (void)snprintf(out->message, sizeof(out->message), "decrypt failed");

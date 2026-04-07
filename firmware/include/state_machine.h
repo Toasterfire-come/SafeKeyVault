@@ -8,8 +8,10 @@
 typedef struct {
     device_state_t state;
     bool unlocked;
+    bool wiped;
     unsigned int failed_pin_attempts;
     unsigned int inactivity_seconds;
+    unsigned int lockout_ticks_remaining;
     unsigned int selected_credential_idx;
 } device_context_t;
 
@@ -27,5 +29,9 @@ bool state_machine_request_save(
     device_context_t *ctx,
     const credential_record_t *record
 );
+bool state_machine_is_wiped(const device_context_t *ctx);
+unsigned int state_machine_lockout_remaining(const device_context_t *ctx);
+void state_machine_apply_settings(const runtime_settings_t *settings);
+void state_machine_get_settings(runtime_settings_t *out_settings);
 
 #endif

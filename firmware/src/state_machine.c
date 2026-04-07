@@ -7,6 +7,9 @@
 #include "browser_protocol.h"
 #include "password_store.h"
 
+#define LOCKOUT_TICKS_BASE 3u
+#define LOCKOUT_TICKS_STEP 2u
+
 static runtime_settings_t g_settings = {
     .auto_popup_enabled = true,
     .manual_popup_requires_touch = true,
@@ -14,6 +17,14 @@ static runtime_settings_t g_settings = {
     .hold_required_for_selection = true,
     .autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT,
 };
+
+static void reset_unlock_session(device_context_t *ctx) {
+    ctx->unlocked = false;
+    ctx->inactivity_seconds = 0u;
+    if (ctx->state != DEVICE_LOCKED_OUT) {
+        ctx->state = DEVICE_LOCKED;
+    }
+}
 
 void state_machine_init(device_context_t *ctx) {
     if (ctx == NULL) {
@@ -27,14 +38,21 @@ void state_machine_tick(device_context_t *ctx) {
     if (ctx == NULL) {
         return;
     }
+
+    if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
+        ctx->lockout_ticks_remaining--;
+        if (ctx->lockout_ticks_remaining == 0u && !ctx->wiped) {
+            ctx->state = DEVICE_LOCKED;
+        }
+        return;
+    }
+
     if (!ctx->unlocked || ctx->state == DEVICE_LOCKED_OUT) {
         return;
     }
     ctx->inactivity_seconds++;
     if (ctx->inactivity_seconds >= g_settings.autolock_seconds) {
-        ctx->unlocked = false;
-        ctx->state = DEVICE_LOCKED;
-        ctx->inactivity_seconds = 0u;
+        reset_unlock_session(ctx);
     }
 }
 
@@ -91,35 +109,47 @@ void state_machine_on_touch_hold(device_context_t *ctx) {
 }
 
 bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
-    if (ctx == NULL || pin == NULL) {
-        return false;
-    }
-
-    if (ctx->state == DEVICE_LOCKED_OUT) {
-        return false;
-    }
-
     bool all_digits = true;
-    for (size_t i = 0; pin[i] != '\0'; ++i) {
-        if (pin[i] < '0' || pin[i] > '9') {
+    size_t pin_len = 0u;
+
+    if (ctx == NULL || pin == NULL || ctx->wiped) {
+        return false;
+    }
+
+    if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
+        return false;
+    }
+
+    for (pin_len = 0u; pin[pin_len] != '\0'; ++pin_len) {
+        if (pin[pin_len] < '0' || pin[pin_len] > '9') {
             all_digits = false;
             break;
         }
     }
 
-    if (strlen(pin) != PIN_DIGITS || !all_digits || strncmp(pin, "12345", PIN_DIGITS) != 0) {
-        ctx->failed_pin_attempts++;
-    } else {
+    if (pin_len == PIN_DIGITS && all_digits && strncmp(pin, "12345", PIN_DIGITS) == 0) {
         ctx->failed_pin_attempts = 0u;
+        ctx->lockout_ticks_remaining = 0u;
         ctx->unlocked = true;
         ctx->state = DEVICE_UNLOCKED;
         ctx->inactivity_seconds = 0u;
         return true;
     }
 
-    if (ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_LOCKOUT) {
+    ctx->failed_pin_attempts++;
+    reset_unlock_session(ctx);
+
+    if (ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_WIPE) {
+        ctx->wiped = true;
         ctx->state = DEVICE_LOCKED_OUT;
-        ctx->unlocked = false;
+        ctx->lockout_ticks_remaining = 0u;
+        return false;
+    }
+
+    if (ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_LOCKOUT) {
+        unsigned int overflow = ctx->failed_pin_attempts - MAX_PIN_FAILURES_BEFORE_LOCKOUT;
+        ctx->state = DEVICE_LOCKED_OUT;
+        ctx->lockout_ticks_remaining = LOCKOUT_TICKS_BASE + (overflow * LOCKOUT_TICKS_STEP);
     }
     return false;
 }
@@ -134,7 +164,7 @@ bool state_machine_request_fill(device_context_t *ctx,
     if (ctx == NULL || record == NULL || origin == NULL) {
         return false;
     }
-    if (!ctx->unlocked) {
+    if (!ctx->unlocked || ctx->wiped || ctx->state == DEVICE_LOCKED_OUT) {
         return false;
     }
 
@@ -154,7 +184,7 @@ bool state_machine_request_fill(device_context_t *ctx,
     }
 
     ctx->inactivity_seconds = 0u;
-    if (g_settings.require_touch_for_fill) {
+    if (g_settings.require_touch_for_fill || record->requires_touch) {
         ctx->state = DEVICE_PROMPT_FILL;
     } else {
         ctx->state = DEVICE_CONFIRM_TYPE;
@@ -167,7 +197,7 @@ bool state_machine_request_save(device_context_t *ctx, const credential_record_t
     BrowserCommand cmd;
     BrowserCommandResult result;
 
-    if (ctx == NULL || record == NULL || !ctx->unlocked) {
+    if (ctx == NULL || record == NULL || !ctx->unlocked || ctx->wiped || ctx->state == DEVICE_LOCKED_OUT) {
         return false;
     }
 
@@ -189,4 +219,32 @@ bool state_machine_request_save(device_context_t *ctx, const credential_record_t
     ctx->state = DEVICE_PROMPT_SAVE;
     ctx->inactivity_seconds = 0u;
     return true;
+}
+
+bool state_machine_is_wiped(const device_context_t *ctx) {
+    return ctx != NULL && ctx->wiped;
+}
+
+unsigned int state_machine_lockout_remaining(const device_context_t *ctx) {
+    if (ctx == NULL) {
+        return 0u;
+    }
+    return ctx->lockout_ticks_remaining;
+}
+
+void state_machine_apply_settings(const runtime_settings_t *settings) {
+    if (settings == NULL) {
+        return;
+    }
+    g_settings = *settings;
+    if (g_settings.autolock_seconds == 0u) {
+        g_settings.autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT;
+    }
+}
+
+void state_machine_get_settings(runtime_settings_t *out_settings) {
+    if (out_settings == NULL) {
+        return;
+    }
+    *out_settings = g_settings;
 }
