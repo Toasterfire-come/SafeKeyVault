@@ -32,12 +32,12 @@
         {
           "name": "D+",
           "number": "D+",
-          "net": "USB_DP"
+          "net": "USB_DP_CONN"
         },
         {
           "name": "D-",
           "number": "D-",
-          "net": "USB_DM"
+          "net": "USB_DM_CONN"
         }
       ]
     },
@@ -74,6 +74,42 @@
           "name": "2",
           "number": "2",
           "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R8",
+      "type": "Resistor",
+      "value": "27",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "USB_DP_CONN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "USB_DP"
+        }
+      ]
+    },
+    {
+      "ref": "R9",
+      "type": "Resistor",
+      "value": "27",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "USB_DM_CONN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "USB_DM"
         }
       ]
     },
@@ -235,7 +271,7 @@
         {
           "name": "BOOTSEL",
           "number": 56,
-          "net": "BOOTSEL_NET"
+          "net": "QSPI_CSN_MCU"
         },
         {
           "name": "SWDIO",
@@ -246,6 +282,31 @@
           "name": "SWCLK",
           "number": 24,
           "net": "SWCLK"
+        },
+        {
+          "name": "QSPI_SCLK",
+          "number": 52,
+          "net": "QSPI_SCLK"
+        },
+        {
+          "name": "QSPI_SD0",
+          "number": 53,
+          "net": "QSPI_SD0"
+        },
+        {
+          "name": "QSPI_SD1",
+          "number": 55,
+          "net": "QSPI_SD1"
+        },
+        {
+          "name": "QSPI_SD2",
+          "number": 54,
+          "net": "QSPI_SD2"
+        },
+        {
+          "name": "QSPI_SD3",
+          "number": 51,
+          "net": "QSPI_SD3"
         }
       ]
     },
@@ -360,7 +421,73 @@
       ]
     },
     {
+      "ref": "U6",
+      "type": "W25Q128",
+      "value": "",
+      "footprint": "Package_SO:SOIC-8_5.23x5.23mm_P1.27mm",
+      "pins": [
+        {
+          "name": "VCC",
+          "number": "VCC",
+          "net": "3V3"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "CS",
+          "number": "CS",
+          "net": "QSPI_CSN_FLASH"
+        },
+        {
+          "name": "CLK",
+          "number": "CLK",
+          "net": "QSPI_SCLK"
+        },
+        {
+          "name": "DI",
+          "number": "DI",
+          "net": "QSPI_SD0"
+        },
+        {
+          "name": "DO",
+          "number": "DO",
+          "net": "QSPI_SD1"
+        },
+        {
+          "name": "WP",
+          "number": "WP",
+          "net": "QSPI_SD2"
+        },
+        {
+          "name": "HOLD",
+          "number": "HOLD",
+          "net": "QSPI_SD3"
+        }
+      ]
+    },
+    {
       "ref": "C7",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C10",
       "type": "Capacitor",
       "value": "0.1uF",
       "footprint": "Capacitor_SMD:C_0603_1608Metric",
@@ -617,12 +744,30 @@
         {
           "name": "1",
           "number": "1",
-          "net": "BOOTSEL_NET"
+          "net": "QSPI_CSN_FLASH"
         },
         {
           "name": "2",
           "number": "2",
           "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R10",
+      "type": "Resistor",
+      "value": "1k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "QSPI_CSN_MCU"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "QSPI_CSN_FLASH"
         }
       ]
     },
@@ -706,7 +851,17 @@
           "pin": "VCC"
         },
         {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "VCC"
+        },
+        {
           "ref": "C7",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "C10",
           "component_type": "Capacitor",
           "pin": "1"
         },
@@ -729,22 +884,6 @@
           "ref": "U5",
           "component_type": "TTP223",
           "pin": "VDD"
-        }
-      ]
-    },
-    {
-      "name": "BOOTSEL_NET",
-      "label": "BOOTSEL_NET",
-      "connections": [
-        {
-          "ref": "U2",
-          "component_type": "RP2040",
-          "pin": "BOOTSEL"
-        },
-        {
-          "ref": "SW1",
-          "component_type": "PushButton",
-          "pin": "1"
         }
       ]
     },
@@ -850,7 +989,17 @@
           "pin": "GND"
         },
         {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "GND"
+        },
+        {
           "ref": "C7",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C10",
           "component_type": "Capacitor",
           "pin": "2"
         },
@@ -1008,6 +1157,123 @@
       ]
     },
     {
+      "name": "QSPI_CSN_FLASH",
+      "label": "QSPI_CSN_FLASH",
+      "connections": [
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "CS"
+        },
+        {
+          "ref": "SW1",
+          "component_type": "PushButton",
+          "pin": "1"
+        },
+        {
+          "ref": "R10",
+          "component_type": "Resistor",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_CSN_MCU",
+      "label": "QSPI_CSN_MCU",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "BOOTSEL"
+        },
+        {
+          "ref": "R10",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SCLK",
+      "label": "QSPI_SCLK",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SCLK"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "CLK"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD0",
+      "label": "QSPI_SD0",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD0"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "DI"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD1",
+      "label": "QSPI_SD1",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD1"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "DO"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD2",
+      "label": "QSPI_SD2",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD2"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "WP"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD3",
+      "label": "QSPI_SD3",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD3"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "HOLD"
+        }
+      ]
+    },
+    {
       "name": "SPI_CLK",
       "label": "SPI_CLK",
       "connections": [
@@ -1129,9 +1395,9 @@
       "label": "USB_DM",
       "connections": [
         {
-          "ref": "J1",
-          "component_type": "USB_C",
-          "pin": "D-"
+          "ref": "R9",
+          "component_type": "Resistor",
+          "pin": "2"
         },
         {
           "ref": "U2",
@@ -1141,8 +1407,40 @@
       ]
     },
     {
+      "name": "USB_DM_CONN",
+      "label": "USB_DM_CONN",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "D-"
+        },
+        {
+          "ref": "R9",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
       "name": "USB_DP",
       "label": "USB_DP",
+      "connections": [
+        {
+          "ref": "R8",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "USB_DP"
+        }
+      ]
+    },
+    {
+      "name": "USB_DP_CONN",
+      "label": "USB_DP_CONN",
       "connections": [
         {
           "ref": "J1",
@@ -1150,9 +1448,9 @@
           "pin": "D+"
         },
         {
-          "ref": "U2",
-          "component_type": "RP2040",
-          "pin": "USB_DP"
+          "ref": "R8",
+          "component_type": "Resistor",
+          "pin": "1"
         }
       ]
     },
@@ -1269,7 +1567,17 @@
     {
       "net": "3V3",
       "from": "U1.VOUT",
+      "to": "U6.VCC"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
       "to": "C7.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C10.1"
     },
     {
       "net": "3V3",
@@ -1290,11 +1598,6 @@
       "net": "3V3",
       "from": "U1.VOUT",
       "to": "U5.VDD"
-    },
-    {
-      "net": "BOOTSEL_NET",
-      "from": "U2.BOOTSEL",
-      "to": "SW1.1"
     },
     {
       "net": "CC1_NET",
@@ -1369,7 +1672,17 @@
     {
       "net": "GND",
       "from": "J1.GND",
+      "to": "U6.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
       "to": "C7.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C10.2"
     },
     {
       "net": "GND",
@@ -1457,6 +1770,46 @@
       "to": "R7.1"
     },
     {
+      "net": "QSPI_CSN_FLASH",
+      "from": "U6.CS",
+      "to": "SW1.1"
+    },
+    {
+      "net": "QSPI_CSN_FLASH",
+      "from": "U6.CS",
+      "to": "R10.2"
+    },
+    {
+      "net": "QSPI_CSN_MCU",
+      "from": "U2.BOOTSEL",
+      "to": "R10.1"
+    },
+    {
+      "net": "QSPI_SCLK",
+      "from": "U2.QSPI_SCLK",
+      "to": "U6.CLK"
+    },
+    {
+      "net": "QSPI_SD0",
+      "from": "U2.QSPI_SD0",
+      "to": "U6.DI"
+    },
+    {
+      "net": "QSPI_SD1",
+      "from": "U2.QSPI_SD1",
+      "to": "U6.DO"
+    },
+    {
+      "net": "QSPI_SD2",
+      "from": "U2.QSPI_SD2",
+      "to": "U6.WP"
+    },
+    {
+      "net": "QSPI_SD3",
+      "from": "U2.QSPI_SD3",
+      "to": "U6.HOLD"
+    },
+    {
       "net": "SPI_CLK",
       "from": "U2.GP18",
       "to": "U3.CLK"
@@ -1498,13 +1851,23 @@
     },
     {
       "net": "USB_DM",
-      "from": "J1.D-",
+      "from": "R9.2",
       "to": "U2.USB_DM"
     },
     {
+      "net": "USB_DM_CONN",
+      "from": "J1.D-",
+      "to": "R9.1"
+    },
+    {
       "net": "USB_DP",
-      "from": "J1.D+",
+      "from": "R8.2",
       "to": "U2.USB_DP"
+    },
+    {
+      "net": "USB_DP_CONN",
+      "from": "J1.D+",
+      "to": "R8.1"
     },
     {
       "net": "VBUS",
@@ -1539,7 +1902,6 @@
   ],
   "net_labels": [
     "3V3",
-    "BOOTSEL_NET",
     "CC1_NET",
     "CC2_NET",
     "GND",
@@ -1549,6 +1911,13 @@
     "LED1_CTRL",
     "LED2_ANODE",
     "LED2_CTRL",
+    "QSPI_CSN_FLASH",
+    "QSPI_CSN_MCU",
+    "QSPI_SCLK",
+    "QSPI_SD0",
+    "QSPI_SD1",
+    "QSPI_SD2",
+    "QSPI_SD3",
     "SPI_CLK",
     "SPI_CS",
     "SPI_MISO",
@@ -1557,7 +1926,9 @@
     "SWDIO",
     "TOUCH_OUT",
     "USB_DM",
+    "USB_DM_CONN",
     "USB_DP",
+    "USB_DP_CONN",
     "VBUS",
     "XIN",
     "XOUT"
@@ -1566,7 +1937,8 @@
     "notes": [
       "Full connectivity generated from logical net assignments.",
       "RP2040 pin numbers are exact QFN-56 package pins from RP2040 datasheet table 615-621.",
-      "Footprints are assigned as KiCad-compatible library identifiers."
+      "Footprints are assigned as KiCad-compatible library identifiers.",
+      "ERC verifies USB series resistors and complete RP2040 QSPI boot flash wiring."
     ]
   }
 }

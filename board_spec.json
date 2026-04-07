@@ -21,6 +21,33 @@
     },
     {
       "name": "XOUT"
+    },
+    {
+      "name": "USB_DP_CONN"
+    },
+    {
+      "name": "USB_DM_CONN"
+    },
+    {
+      "name": "QSPI_CSN_MCU"
+    },
+    {
+      "name": "QSPI_CSN_FLASH"
+    },
+    {
+      "name": "QSPI_SCLK"
+    },
+    {
+      "name": "QSPI_SD0"
+    },
+    {
+      "name": "QSPI_SD1"
+    },
+    {
+      "name": "QSPI_SD2"
+    },
+    {
+      "name": "QSPI_SD3"
     }
   ],
   "components": [
@@ -32,8 +59,8 @@
         "GND": "GND",
         "CC1": "CC1_NET",
         "CC2": "CC2_NET",
-        "D+": "USB_DP",
-        "D-": "USB_DM"
+        "D+": "USB_DP_CONN",
+        "D-": "USB_DM_CONN"
       }
     },
     {
@@ -52,6 +79,24 @@
       "pins": {
         "1": "CC2_NET",
         "2": "GND"
+      }
+    },
+    {
+      "ref": "R8",
+      "type": "Resistor",
+      "value": "27",
+      "pins": {
+        "1": "USB_DP_CONN",
+        "2": "USB_DP"
+      }
+    },
+    {
+      "ref": "R9",
+      "type": "Resistor",
+      "value": "27",
+      "pins": {
+        "1": "USB_DM_CONN",
+        "2": "USB_DM"
       }
     },
     {
@@ -103,9 +148,14 @@
         "GP17": "SPI_CS",
         "GP18": "SPI_CLK",
         "GP19": "SPI_MOSI",
-        "BOOTSEL": "BOOTSEL_NET",
+        "BOOTSEL": "QSPI_CSN_MCU",
         "SWDIO": "SWDIO",
-        "SWCLK": "SWCLK"
+        "SWCLK": "SWCLK",
+        "QSPI_SCLK": "QSPI_SCLK",
+        "QSPI_SD0": "QSPI_SD0",
+        "QSPI_SD1": "QSPI_SD1",
+        "QSPI_SD2": "QSPI_SD2",
+        "QSPI_SD3": "QSPI_SD3"
       }
     },
     {
@@ -157,7 +207,30 @@
       }
     },
     {
+      "ref": "U6",
+      "type": "W25Q128",
+      "pins": {
+        "VCC": "3V3",
+        "GND": "GND",
+        "CS": "QSPI_CSN_FLASH",
+        "CLK": "QSPI_SCLK",
+        "DI": "QSPI_SD0",
+        "DO": "QSPI_SD1",
+        "WP": "QSPI_SD2",
+        "HOLD": "QSPI_SD3"
+      }
+    },
+    {
       "ref": "C7",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "pins": {
+        "1": "3V3",
+        "2": "GND"
+      }
+    },
+    {
+      "ref": "C10",
       "type": "Capacitor",
       "value": "0.1uF",
       "pins": {
@@ -276,8 +349,17 @@
       "ref": "SW1",
       "type": "PushButton",
       "pins": {
-        "1": "BOOTSEL_NET",
+        "1": "QSPI_CSN_FLASH",
         "2": "GND"
+      }
+    },
+    {
+      "ref": "R10",
+      "type": "Resistor",
+      "value": "1k",
+      "pins": {
+        "1": "QSPI_CSN_MCU",
+        "2": "QSPI_CSN_FLASH"
       }
     },
     {

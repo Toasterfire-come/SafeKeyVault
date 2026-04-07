@@ -37,6 +37,11 @@ RP2040_PIN_NUMBERS: Dict[str, int] = {
     "GP18": 29,
     "GP19": 30,
     "BOOTSEL": 56,  # QSPI_CSn
+    "QSPI_SCLK": 52,
+    "QSPI_SD0": 53,
+    "QSPI_SD1": 55,
+    "QSPI_SD2": 54,
+    "QSPI_SD3": 51,
     "SWDIO": 25,    # SWD
     "SWCLK": 24,
 }
@@ -139,6 +144,14 @@ def build_wires(net_index: Dict[str, List[dict]]) -> List[dict]:
 
 def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[ErcIssue]]:
     issues: List[ErcIssue] = []
+    resistor_pairs = set()
+
+    for comp in spec["components"]:
+        if comp["type"] != "Resistor":
+            continue
+        nets = list(comp["pins"].values())
+        if len(nets) == 2 and all(isinstance(net, str) and net for net in nets):
+            resistor_pairs.add(frozenset(nets))
 
     # Rule: every pin must belong to a named net.
     for comp in spec["components"]:
@@ -174,26 +187,72 @@ def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[Erc
                 )
             )
 
-    # Design recommendations for RP2040 USB bring-up.
-    if "USB_DP" in net_index and "USB_DM" in net_index:
+    # Rule: USB data lines should include series resistors near RP2040.
+    dp_series_ok = frozenset({"USB_DP", "USB_DP_CONN"}) in resistor_pairs
+    dm_series_ok = frozenset({"USB_DM", "USB_DM_CONN"}) in resistor_pairs
+    if (
+        "USB_DP" in net_index
+        and "USB_DM" in net_index
+        and not (dp_series_ok and dm_series_ok)
+    ):
         issues.append(
             ErcIssue(
                 severity="warning",
                 rule="usb_series_resistors_recommended",
-                message="RP2040 USB_DP/USB_DM typically require 27R series resistors near the MCU",
+                message=(
+                    "Add 27R series resistors between USB connector D+/D- and RP2040 "
+                    "USB_DP/USB_DM (expected nets USB_DP_CONN/USB_DM_CONN)"
+                ),
             )
         )
 
-    issues.append(
-        ErcIssue(
-            severity="warning",
-            rule="rp2040_boot_flash_required",
-            message=(
-                "RP2040 BOOTSEL/QSPI_CSn (pin 56) is connected to BOOTSEL switch, "
-                "but QSPI boot flash pins are not present in this netlist; RP2040 cannot boot from flash without it"
-            ),
+    # Rule: RP2040 boot flash QSPI path should be complete.
+    rp2040 = next((c for c in spec["components"] if c["type"] == "RP2040"), None)
+    qspi_ok = False
+    if rp2040:
+        rp_pins = rp2040["pins"]
+        required_rp = {"BOOTSEL", "QSPI_SCLK", "QSPI_SD0", "QSPI_SD1", "QSPI_SD2", "QSPI_SD3"}
+        if required_rp.issubset(set(rp_pins.keys())):
+            mcu_csn = rp_pins["BOOTSEL"]
+            mcu_sclk = rp_pins["QSPI_SCLK"]
+            mcu_sd0 = rp_pins["QSPI_SD0"]
+            mcu_sd1 = rp_pins["QSPI_SD1"]
+            mcu_sd2 = rp_pins["QSPI_SD2"]
+            mcu_sd3 = rp_pins["QSPI_SD3"]
+
+            flashes = [c for c in spec["components"] if c["type"] == "W25Q128"]
+            for flash in flashes:
+                fp = flash["pins"]
+                required_fp = {"CS", "CLK", "DI", "DO", "WP", "HOLD"}
+                if not required_fp.issubset(set(fp.keys())):
+                    continue
+                cs_ok = (
+                    fp["CS"] == mcu_csn
+                    or frozenset({fp["CS"], mcu_csn}) in resistor_pairs
+                )
+                if (
+                    cs_ok
+                    and fp["CLK"] == mcu_sclk
+                    and fp["DI"] == mcu_sd0
+                    and fp["DO"] == mcu_sd1
+                    and fp["WP"] == mcu_sd2
+                    and fp["HOLD"] == mcu_sd3
+                ):
+                    qspi_ok = True
+                    break
+
+    if not qspi_ok:
+        issues.append(
+            ErcIssue(
+                severity="warning",
+                rule="rp2040_boot_flash_required",
+                message=(
+                    "RP2040 boot flash path incomplete: add W25Q128 with CS/CLK/DI/DO/WP/HOLD "
+                    "to BOOTSEL/QSPI_SCLK/QSPI_SD0/QSPI_SD1/QSPI_SD2/QSPI_SD3 "
+                    "(CS may be connected through a series resistor for BOOTSEL switching)"
+                ),
+            )
         )
-    )
 
     status = "PASS" if not any(issue.severity == "error" for issue in issues) else "FAIL"
     return status, issues
@@ -216,6 +275,7 @@ def main() -> None:
                 "Full connectivity generated from logical net assignments.",
                 "RP2040 pin numbers are exact QFN-56 package pins from RP2040 datasheet table 615-621.",
                 "Footprints are assigned as KiCad-compatible library identifiers.",
+                "ERC verifies USB series resistors and complete RP2040 QSPI boot flash wiring.",
             ]
         },
     }

@@ -2,16 +2,5 @@
   "project": "RP2040_Custom_Board",
   "status": "PASS",
   "errors": [],
-  "warnings": [
-    {
-      "severity": "warning",
-      "rule": "usb_series_resistors_recommended",
-      "message": "RP2040 USB_DP/USB_DM typically require 27R series resistors near the MCU"
-    },
-    {
-      "severity": "warning",
-      "rule": "rp2040_boot_flash_required",
-      "message": "RP2040 BOOTSEL/QSPI_CSn (pin 56) is connected to BOOTSEL switch, but QSPI boot flash pins are not present in this netlist; RP2040 cannot boot from flash without it"
-    }
-  ]
+  "warnings": []
 }
