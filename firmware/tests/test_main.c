@@ -69,9 +69,12 @@ static void test_state_machine_touch_gate(void) {
   strncpy(rec.password, "strongpass123!", sizeof(rec.password) - 1);
   rec.requires_touch = true;
 
-  assert(!state_machine_request_fill(&ctx, &rec, "https://github.com"));
-  state_machine_on_touch_tap(&ctx);
   assert(state_machine_request_fill(&ctx, &rec, "https://github.com"));
+  assert(ctx.state == DEVICE_PROMPT_FILL);
+  state_machine_on_touch_tap(&ctx);
+  assert(ctx.state == DEVICE_CONFIRM_TYPE);
+  state_machine_on_touch_tap(&ctx);
+  assert(ctx.state == DEVICE_UNLOCKED);
 }
 
 static void test_browser_suspicious_origin(void) {
