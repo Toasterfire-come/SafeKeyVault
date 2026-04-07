@@ -4,6 +4,7 @@
 
 #include "browser_protocol.h"
 #include "action_engine.h"
+#include "ui_feedback.h"
 #include "password_generator.h"
 #include "password_store.h"
 #include "security_policy.h"
@@ -233,7 +234,11 @@ static void test_action_engine_auto_popup_modes(void) {
   assert(action_engine_confirm_hold(&engine, &out));
   assert(!out.performed);
   assert(out.touch_required);
-  assert(strstr(out.message, "manual popup") != NULL);
+  assert(strstr(out.message, "press manual button") != NULL);
+
+  action_engine_arm_manual_popup(&engine);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
 
   settings.auto_popup_enabled = true;
   state_machine_apply_settings(&settings);
@@ -241,6 +246,43 @@ static void test_action_engine_auto_popup_modes(void) {
   assert(out.save_prompt_recommended);
   assert(action_engine_confirm_hold(&engine, &out));
   assert(out.performed);
+}
+
+static void test_action_engine_ui_feedback_mapping(void) {
+  device_context_t ctx = {0};
+  ActionResult action = {0};
+  ui_status_t status = {0};
+
+  ctx.state = DEVICE_LOCKED;
+  strncpy(action.message, "device locked", sizeof(action.message) - 1);
+  ui_feedback_from_state(&ctx, &action, &status);
+  assert(status.led == UI_LED_LOCKED_PULSE);
+  assert(strstr(status.status_text, "blocked") != NULL);
+
+  memset(&action, 0, sizeof(action));
+  ctx.state = DEVICE_PROMPT_FILL;
+  action.allowed = true;
+  action.touch_required = true;
+  strncpy(action.message, "touch to confirm fill", sizeof(action.message) - 1);
+  ui_feedback_from_state(&ctx, &action, &status);
+  assert(status.led == UI_LED_SAVE_PROMPT);
+  assert(status.show_touch_hint);
+
+  memset(&action, 0, sizeof(action));
+  ctx.state = DEVICE_UNLOCKED;
+  action.allowed = true;
+  action.performed = true;
+  strncpy(action.message, "credential saved", sizeof(action.message) - 1);
+  ui_feedback_from_state(&ctx, &action, &status);
+  assert(status.led == UI_LED_UNLOCKED_SOLID);
+  assert(strstr(status.status_text, "action complete") != NULL);
+
+  memset(&action, 0, sizeof(action));
+  ctx.state = DEVICE_LOCKED_OUT;
+  action.allowed = false;
+  strncpy(action.message, "device locked", sizeof(action.message) - 1);
+  ui_feedback_from_state(&ctx, &action, &status);
+  assert(status.led == UI_LED_LOCKED_OUT);
 }
 
 int main(void) {
@@ -253,6 +295,7 @@ int main(void) {
   test_browser_suspicious_origin();
   test_action_engine_fill_save_generate_select();
   test_action_engine_auto_popup_modes();
+  test_action_engine_ui_feedback_mapping();
 
   puts("firmware tests: OK");
   return 0;

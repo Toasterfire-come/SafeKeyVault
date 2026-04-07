@@ -48,12 +48,14 @@ typedef struct {
   pending_request_t pending;
   credential_t last_selected;
   bool has_last_selected;
+  bool manual_popup_armed;
 } action_engine_t;
 
 void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_t *ctx);
 bool action_engine_handle_command(action_engine_t *engine,
                                   const BrowserCommand *cmd,
                                   ActionResult *out);
+void action_engine_arm_manual_popup(action_engine_t *engine);
 bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out);
 bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out);
 

@@ -126,6 +126,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       engine->pending.kind = ACTION_PENDING_FILL;
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
+      engine->manual_popup_armed = false;
 
       out->allowed = true;
       out->touch_required = settings.manual_popup_requires_touch;
@@ -165,6 +166,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
       engine->pending.override_with_hold = (policy.is_common || policy.is_reused);
+      engine->manual_popup_armed = false;
 
       out->allowed = true;
       out->touch_required = true;
@@ -203,6 +205,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       engine->pending.kind = ACTION_PENDING_GENERATE;
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
+      engine->manual_popup_armed = false;
 
       out->allowed = true;
       out->touch_required = true;
@@ -233,6 +236,13 @@ bool action_engine_handle_command(action_engine_t *engine,
       (void)snprintf(out->message, sizeof(out->message), "unsupported command");
       return true;
   }
+}
+
+void action_engine_arm_manual_popup(action_engine_t *engine) {
+  if (engine == NULL) {
+    return;
+  }
+  engine->manual_popup_armed = true;
 }
 
 static bool commit_pending_save(action_engine_t *engine, ActionResult *out, bool hold) {
@@ -344,9 +354,13 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
 
   if (engine->pending.kind == ACTION_PENDING_FILL) {
     if (!settings.auto_popup_enabled && settings.manual_popup_requires_touch) {
-      out->touch_required = true;
-      (void)snprintf(out->message, sizeof(out->message), "auto popup disabled; manual popup required");
-      return true;
+      if (!engine->manual_popup_armed) {
+        out->touch_required = true;
+        (void)snprintf(out->message, sizeof(out->message),
+                       "auto popup disabled; press manual button first");
+        return true;
+      }
+      engine->manual_popup_armed = false;
     }
     credential_record_t rec;
     if (!load_record_plaintext(&engine->pending.credential, &rec)) {
