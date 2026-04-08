@@ -119,6 +119,7 @@ bool crypto_engine_encrypt_aead(const uint8_t *plaintext,
                                 const uint8_t *aad,
                                 size_t aad_len,
                                 uint8_t *ciphertext,
+                                size_t ciphertext_capacity,
                                 size_t *ciphertext_len,
                                 uint8_t out_tag[16]) {
   size_t i;
@@ -126,7 +127,7 @@ bool crypto_engine_encrypt_aead(const uint8_t *plaintext,
   if (plaintext == NULL || ciphertext == NULL || ciphertext_len == NULL || out_tag == NULL) {
     return false;
   }
-  if (*ciphertext_len < plaintext_len) {
+  if (ciphertext_capacity < plaintext_len || *ciphertext_len < plaintext_len) {
     return false;
   }
   for (i = 0u; i < plaintext_len; ++i) {
@@ -151,6 +152,7 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
                                 size_t aad_len,
                                 const uint8_t tag[16],
                                 uint8_t *plaintext,
+                                size_t plaintext_capacity,
                                 size_t *plaintext_len) {
   size_t i;
   uint8_t expected_tag[16];
@@ -159,7 +161,7 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
   if (ciphertext == NULL || plaintext == NULL || plaintext_len == NULL || tag == NULL) {
     return false;
   }
-  if (*plaintext_len < ciphertext_len) {
+  if (plaintext_capacity < ciphertext_len || *plaintext_len < ciphertext_len) {
     return false;
   }
   for (i = 0u; i < ciphertext_len; ++i) {

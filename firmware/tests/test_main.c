@@ -632,11 +632,11 @@ static void test_crypto_engine_interfaces(void) {
 
   assert(crypto_engine_encrypt_aead(plaintext, strlen((const char *)plaintext),
                                     (const uint8_t *)"aad", 3u,
-                                    ciphertext, &ciphertext_len, tag));
+                                    ciphertext, sizeof(ciphertext), &ciphertext_len, tag));
   assert(ciphertext_len == strlen((const char *)plaintext));
   assert(crypto_engine_decrypt_aead(ciphertext, ciphertext_len,
                                     (const uint8_t *)"aad", 3u, tag,
-                                    decrypted, &decrypted_len));
+                                    decrypted, sizeof(decrypted), &decrypted_len));
   assert(decrypted_len == strlen((const char *)plaintext));
   assert(memcmp(decrypted, plaintext, decrypted_len) == 0);
 
