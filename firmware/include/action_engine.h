@@ -76,6 +76,10 @@ bool action_engine_device_generate_for_origin(action_engine_t *engine,
                                               const char *username,
                                               ActionResult *out);
 bool action_engine_device_select_next(action_engine_t *engine, ActionResult *out);
+bool action_engine_button_press(action_engine_t *engine,
+                                const char *origin,
+                                ActionResult *out);
+bool action_engine_button_hold(action_engine_t *engine, ActionResult *out);
 void action_engine_arm_manual_popup(action_engine_t *engine);
 bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out);
 bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out);
