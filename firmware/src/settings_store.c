@@ -12,7 +12,8 @@
 typedef struct {
   bool initialized;
   settings_blob_t blob;
-  char encrypted_payload[128];
+  uint8_t encrypted_payload[128];
+  size_t encrypted_payload_len;
 } settings_store_state_t;
 
 static settings_store_state_t g_settings_store;
@@ -35,30 +36,81 @@ static bool build_blob(runtime_settings_t settings, settings_blob_t *out) {
   return true;
 }
 
+static void settings_store_nonce(const settings_blob_t *blob, uint8_t out_nonce[12]) {
+  uint8_t seed[16];
+  if (out_nonce == NULL) {
+    return;
+  }
+  memset(seed, 0, sizeof(seed));
+  if (blob != NULL) {
+    memcpy(seed, &blob->version, sizeof(blob->version));
+    memcpy(seed + 4u, &blob->crc32, sizeof(blob->crc32));
+    memcpy(seed + 8u, &blob->settings.autolock_seconds, sizeof(blob->settings.autolock_seconds));
+  }
+  crypto_engine_hash16(seed, sizeof(seed), seed);
+  memcpy(out_nonce, seed, 12u);
+  security_secure_zero(seed, sizeof(seed));
+}
+
 void settings_store_init(void) {
   memset(&g_settings_store, 0, sizeof(g_settings_store));
+  crypto_engine_init();
+  {
+    const uint8_t default_key[] = {
+        0x31u, 0x52u, 0xA4u, 0x18u, 0x09u, 0x7Fu, 0xC3u, 0x44u,
+        0x8Eu, 0x20u, 0xB7u, 0x5Du, 0x11u, 0xE2u, 0x66u, 0x90u,
+    };
+    crypto_engine_set_master_key(default_key, sizeof(default_key));
+  }
   g_settings_store.initialized = true;
 }
 
 bool settings_store_save(const runtime_settings_t *settings) {
   settings_blob_t blob;
+  uint8_t plaintext[sizeof(settings_blob_t)];
+  uint8_t nonce[12];
+  uint8_t tag[16];
+  size_t ciphertext_len = sizeof(g_settings_store.encrypted_payload);
+
   if (!g_settings_store.initialized || settings == NULL) {
     return false;
   }
   if (!build_blob(*settings, &blob)) {
     return false;
   }
-  memcpy(blob.hmac_tag, &blob.crc32, sizeof(blob.crc32));
+  memset(blob.hmac_tag, 0, sizeof(blob.hmac_tag));
+  memcpy(plaintext, &blob, sizeof(blob));
+  settings_store_nonce(&blob, nonce);
+
+  if (!crypto_engine_encrypt_aead(plaintext, sizeof(plaintext),
+                                  nonce, sizeof(nonce),
+                                  g_settings_store.encrypted_payload,
+                                  sizeof(g_settings_store.encrypted_payload),
+                                  &ciphertext_len,
+                                  tag)) {
+    security_secure_zero(plaintext, sizeof(plaintext));
+    return false;
+  }
+  g_settings_store.encrypted_payload_len = ciphertext_len;
+  memcpy(blob.hmac_tag, tag, sizeof(blob.hmac_tag));
   g_settings_store.blob = blob;
+  security_secure_zero(plaintext, sizeof(plaintext));
+  security_secure_zero(tag, sizeof(tag));
+  security_secure_zero(nonce, sizeof(nonce));
   return true;
 }
 
 bool settings_store_load(runtime_settings_t *settings) {
   settings_blob_t blob;
   uint32_t expected_crc;
-  uint32_t stored_crc_from_tag = 0u;
+  uint8_t plaintext[sizeof(settings_blob_t)];
+  uint8_t nonce[12];
+  size_t plaintext_len = sizeof(plaintext);
 
   if (!g_settings_store.initialized || settings == NULL) {
+    return false;
+  }
+  if (g_settings_store.encrypted_payload_len == 0u) {
     return false;
   }
   blob = g_settings_store.blob;
@@ -66,13 +118,28 @@ bool settings_store_load(runtime_settings_t *settings) {
   if (blob.version != SETTINGS_VERSION) {
     return false;
   }
+  settings_store_nonce(&blob, nonce);
+  if (!crypto_engine_decrypt_aead(g_settings_store.encrypted_payload,
+                                  g_settings_store.encrypted_payload_len,
+                                  nonce, sizeof(nonce),
+                                  blob.hmac_tag,
+                                  plaintext, sizeof(plaintext),
+                                  &plaintext_len)) {
+    security_secure_zero(plaintext, sizeof(plaintext));
+    security_secure_zero(nonce, sizeof(nonce));
+    return false;
+  }
+  if (plaintext_len != sizeof(settings_blob_t)) {
+    security_secure_zero(plaintext, sizeof(plaintext));
+    security_secure_zero(nonce, sizeof(nonce));
+    return false;
+  }
+  memcpy(&blob, plaintext, sizeof(blob));
+  security_secure_zero(plaintext, sizeof(plaintext));
+  security_secure_zero(nonce, sizeof(nonce));
 
   expected_crc = settings_crc(&blob.settings);
   if (expected_crc != blob.crc32) {
-    return false;
-  }
-  memcpy(&stored_crc_from_tag, blob.hmac_tag, sizeof(stored_crc_from_tag));
-  if (stored_crc_from_tag != blob.crc32) {
     return false;
   }
 

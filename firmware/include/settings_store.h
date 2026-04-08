@@ -21,5 +21,6 @@ bool settings_store_load(runtime_settings_t *out_settings);
 bool settings_store_save(const runtime_settings_t *settings);
 bool settings_store_wipe(void);
 void settings_store_factory_reset(void);
+bool settings_store_debug_corrupt(void);
 
 #endif

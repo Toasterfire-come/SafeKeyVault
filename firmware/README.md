@@ -11,6 +11,8 @@ This directory contains a host-testable firmware core scaffold for the RP2040 pa
   If there is no known credential for the active site/app context, press opens settings.
 - **Button hold** opens device settings/password-modify popup mode.
   Popup actions support applying configuration and updating stored passwords.
+- Settings persistence is now encrypted/authenticated through the crypto engine
+  AEAD interface, with tamper rejection checks in host tests.
 - Crypto path now uses a production-oriented `crypto_engine` abstraction with
   AEAD/KDF interfaces and ATECC binding points, currently backed by host-safe
   software fallback implementations for tests.

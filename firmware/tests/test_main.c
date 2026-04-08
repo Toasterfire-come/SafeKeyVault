@@ -392,6 +392,34 @@ static void test_command_codec_and_settings_store(void) {
   assert(settings_store_wipe());
 }
 
+static void test_settings_store_crypto_tamper_rejected(void) {
+  runtime_settings_t settings = {
+      .auto_popup_enabled = true,
+      .manual_popup_requires_touch = false,
+      .require_touch_for_fill = false,
+      .hold_required_for_selection = false,
+      .autolock_seconds = 20u,
+  };
+  runtime_settings_t loaded = {0};
+  settings_blob_t snapshot = {0};
+  uint8_t payload[128];
+  size_t payload_len = 0u;
+
+  settings_store_init();
+  assert(settings_store_save(&settings));
+  assert(settings_store_debug_snapshot(&snapshot, payload, sizeof(payload), &payload_len));
+  assert(payload_len > 0u);
+
+  payload[0] ^= 0x55u;
+  assert(settings_store_debug_restore(&snapshot, payload, payload_len));
+  assert(!settings_store_load(&loaded));
+
+  /* Restore clean snapshot and verify load succeeds. */
+  assert(settings_store_save(&settings));
+  assert(settings_store_load(&loaded));
+  assert(loaded.autolock_seconds == settings.autolock_seconds);
+}
+
 static void test_action_engine_replay_and_pin_change(void) {
   device_context_t ctx;
   vault_t vault;
@@ -658,6 +686,7 @@ int main(void) {
   test_action_engine_ui_feedback_mapping();
   test_security_utils_and_rate_limiter();
   test_command_codec_and_settings_store();
+  test_settings_store_crypto_tamper_rejected();
   test_action_engine_replay_and_pin_change();
   test_device_only_flow();
   test_single_press_and_hold_model();

@@ -11,7 +11,7 @@
 - `browser_protocol`: retained strict input validation for origin/credential record fields.
 - `command_codec`: retained strict fixed-bounds parse/serialize for host test framing.
 - `rate_limiter`: abuse throttling primitive per command channel.
-- `settings_store`: persistent runtime settings with checksum verification.
+- `settings_store`: persistent runtime settings with encrypted/authenticated payload storage.
 - `ui_feedback`: state/action -> LED/status mapping.
 
 ## Security posture
@@ -27,6 +27,6 @@
 ## Known limitations
 
 - Crypto backend still uses fallback primitives in this stage; production AEAD/KDF
-  and full ATECC command path are not yet enabled on target hardware.
+  hardening and full ATECC command path are not yet enabled on target hardware.
 - FIDO2/WebAuthn transport and authenticator logic not yet implemented.
-- ATECC608A-backed key paths not yet integrated.
+- Live ATECC608A transport integration for runtime key operations is not yet integrated.
