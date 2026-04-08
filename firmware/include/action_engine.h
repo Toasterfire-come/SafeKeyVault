@@ -59,6 +59,10 @@ bool action_engine_unlock_with_pin(action_engine_t *engine, const char *pin);
 bool action_engine_try_change_pin(action_engine_t *engine,
                                   const char *old_pin,
                                   const char *new_pin);
+bool action_engine_device_open_settings(action_engine_t *engine, ActionResult *out);
+bool action_engine_device_apply_settings(action_engine_t *engine,
+                                         const runtime_settings_t *settings,
+                                         ActionResult *out);
 bool action_engine_device_save_credential(action_engine_t *engine,
                                           const char *origin,
                                           const char *username,

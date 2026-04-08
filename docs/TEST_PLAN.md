@@ -14,7 +14,7 @@ Coverage includes:
 - password policy and generator
 - vault operations
 - action engine save/fill/generate/select
-- auto-popup/manual-popup behavior
+- single-button press/hold model behavior
 - UI feedback mapping
 - command codec + rate limiter + constant-time compare checks
 
@@ -23,13 +23,12 @@ Coverage includes:
 Manual verification:
 - plug device over USB-C and confirm standard HID keyboard enumeration
 - unlock with 5-digit PIN from on-device input path
-- save credential via on-device flow and confirm touch/hold authorization
-- fill current-site credential through on-device action (touch-gated typing)
-- generate password on-device for new origin and save via hold confirmation
-- select next credential using hold gesture and verify next fill behavior
+- press once to trigger password fill for active site context
+- hold press to open settings/modify popup on-device
+- from popup, change password/settings and confirm persistence
 
 Security checks:
 - no dependency on browser extension or host companion app
-- all sensitive actions require physical interaction
+- all sensitive actions are bound to one press (fill) or hold (settings/modify)
 - lockout/wipe/autolock behavior remains enforced
 

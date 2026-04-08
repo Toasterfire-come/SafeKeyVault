@@ -3,7 +3,7 @@
 ## Core modules
 
 - `state_machine`: lock/unlock, lockout/wipe progression, touch transitions.
-- `action_engine`: executes on-device save/fill/generate/select actions with touch/hold confirmation.
+- `action_engine`: executes on-device save/fill/generate/select actions with a strict single-button model.
 - `password_store` + `vault`: credential storage helpers and wipe path.
 - `security_policy`: password checks (min length 8, common/reuse warning paths).
 - `browser_protocol`: retained strict input validation for origin/credential record fields.
@@ -16,7 +16,8 @@
 
 - No credential fill on origin mismatch.
 - No sensitive action while locked/locked-out/wiped.
-- Touch/hold confirmations gate sensitive actions.
+- Single press triggers password fill for the active credential context.
+- Hold opens settings/modify mode (password/settings changes are done inside that mode).
 - PIN failures trigger lockout, then optional wipe.
 - Plug-and-play flow is device-driven; no browser extension dependency.
 

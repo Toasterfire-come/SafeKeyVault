@@ -546,3 +546,38 @@ bool action_engine_device_select_next(action_engine_t *engine, ActionResult *out
   }
   return action_engine_confirm_hold(engine, out);
 }
+
+bool action_engine_popup_open(action_engine_t *engine, ActionResult *out) {
+  runtime_settings_t settings;
+  if (!is_engine_ready(engine) || out == NULL) {
+    return false;
+  }
+  state_machine_get_settings(&settings);
+  settings.auto_popup_enabled = true;
+  settings.manual_popup_requires_touch = false;
+  settings.require_touch_for_fill = false;
+  settings.hold_required_for_selection = false;
+  state_machine_apply_settings(&settings);
+
+  memset(out, 0, sizeof(*out));
+  out->allowed = true;
+  out->touch_required = false;
+  out->performed = true;
+  (void)snprintf(out->message, sizeof(out->message),
+                 "settings popup open");
+  return true;
+}
+
+bool action_engine_button_press(action_engine_t *engine, const char *origin, ActionResult *out) {
+  if (!is_engine_ready(engine) || origin == NULL || out == NULL) {
+    return false;
+  }
+  return action_engine_device_fill_current(engine, origin, out);
+}
+
+bool action_engine_button_hold(action_engine_t *engine, ActionResult *out) {
+  if (!is_engine_ready(engine) || out == NULL) {
+    return false;
+  }
+  return action_engine_popup_open(engine, out);
+}
