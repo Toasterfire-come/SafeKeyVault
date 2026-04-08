@@ -21,6 +21,12 @@ bool settings_store_load(runtime_settings_t *out_settings);
 bool settings_store_save(const runtime_settings_t *settings);
 bool settings_store_wipe(void);
 void settings_store_factory_reset(void);
-bool settings_store_debug_corrupt(void);
+bool settings_store_debug_snapshot(settings_blob_t *out_blob,
+                                   uint8_t *out_payload,
+                                   size_t payload_capacity,
+                                   size_t *out_payload_len);
+bool settings_store_debug_restore(const settings_blob_t *blob,
+                                  const uint8_t *payload,
+                                  size_t payload_len);
 
 #endif

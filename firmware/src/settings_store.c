@@ -170,3 +170,36 @@ void settings_store_factory_reset(void) {
   (void)settings_store_save(&defaults);
 }
 
+bool settings_store_debug_snapshot(settings_blob_t *out_blob,
+                                   uint8_t *out_payload,
+                                   size_t out_payload_capacity,
+                                   size_t *out_payload_len) {
+  if (!g_settings_store.initialized || out_blob == NULL ||
+      out_payload == NULL || out_payload_len == NULL) {
+    return false;
+  }
+  if (g_settings_store.encrypted_payload_len == 0u ||
+      g_settings_store.encrypted_payload_len > out_payload_capacity) {
+    return false;
+  }
+  *out_blob = g_settings_store.blob;
+  memcpy(out_payload, g_settings_store.encrypted_payload, g_settings_store.encrypted_payload_len);
+  *out_payload_len = g_settings_store.encrypted_payload_len;
+  return true;
+}
+
+bool settings_store_debug_restore(const settings_blob_t *blob,
+                                  const uint8_t *payload,
+                                  size_t payload_len) {
+  if (!g_settings_store.initialized || blob == NULL || payload == NULL) {
+    return false;
+  }
+  if (payload_len == 0u || payload_len > sizeof(g_settings_store.encrypted_payload)) {
+    return false;
+  }
+  g_settings_store.blob = *blob;
+  memcpy(g_settings_store.encrypted_payload, payload, payload_len);
+  g_settings_store.encrypted_payload_len = payload_len;
+  return true;
+}
+
