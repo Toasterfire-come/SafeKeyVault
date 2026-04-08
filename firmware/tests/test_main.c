@@ -567,10 +567,11 @@ static void test_settings_popup_actions(void) {
   assert(strstr(out.message, "settings updated") != NULL);
 
   state_machine_get_settings(&loaded);
-  assert(loaded.auto_popup_enabled == desired.auto_popup_enabled);
-  assert(loaded.manual_popup_requires_touch == desired.manual_popup_requires_touch);
-  assert(loaded.require_touch_for_fill == desired.require_touch_for_fill);
-  assert(loaded.hold_required_for_selection == desired.hold_required_for_selection);
+  /* Single press/hold model enforces interaction flags regardless of requested values. */
+  assert(loaded.auto_popup_enabled);
+  assert(!loaded.manual_popup_requires_touch);
+  assert(!loaded.require_touch_for_fill);
+  assert(!loaded.hold_required_for_selection);
   assert(loaded.autolock_seconds == desired.autolock_seconds);
 
   memset(&out, 0, sizeof(out));

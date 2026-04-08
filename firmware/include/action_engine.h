@@ -68,7 +68,7 @@ bool action_engine_device_save_credential(action_engine_t *engine,
                                           const char *username,
                                           const char *password,
                                           ActionResult *out);
-bool action_engine_device_update_password(action_engine_t *engine,
+bool action_engine_device_modify_password(action_engine_t *engine,
                                           const char *origin,
                                           const char *username,
                                           const char *new_password,

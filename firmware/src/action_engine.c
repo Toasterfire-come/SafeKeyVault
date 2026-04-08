@@ -587,6 +587,15 @@ bool action_engine_device_apply_settings(action_engine_t *engine,
   }
 
   applied = *settings;
+  /* Enforce requested interaction model:
+   * - single press triggers fill
+   * - hold opens settings/modify mode
+   * No extra gesture gates are permitted through runtime settings.
+   */
+  applied.auto_popup_enabled = true;
+  applied.manual_popup_requires_touch = false;
+  applied.require_touch_for_fill = false;
+  applied.hold_required_for_selection = false;
   if (applied.autolock_seconds == 0u) {
     applied.autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT;
   }
