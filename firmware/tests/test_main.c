@@ -670,6 +670,15 @@ static void test_crypto_engine_interfaces(void) {
 
   crypto_engine_password_fingerprint("Password9!", fp, sizeof(fp));
   assert(fp[0] != 0u || fp[1] != 0u);
+
+  {
+    char encrypted[256] = {0};
+    char decrypted_pw[128] = {0};
+    assert(crypto_engine_encrypt_password("RoundTrip9!", encrypted, sizeof(encrypted)));
+    assert(strncmp(encrypted, "v1:", 3u) == 0);
+    assert(crypto_engine_decrypt_password(encrypted, decrypted_pw, sizeof(decrypted_pw)));
+    assert(strcmp(decrypted_pw, "RoundTrip9!") == 0);
+  }
 }
 
 int main(void) {
