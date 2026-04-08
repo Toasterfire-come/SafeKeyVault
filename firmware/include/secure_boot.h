@@ -6,17 +6,29 @@
 #include <stdint.h>
 
 typedef struct {
-  uint32_t image_version;
-  uint32_t minimum_allowed_version;
-  uint8_t image_hash[32];
-  uint8_t signature[64];
-  uint8_t signer_pubkey[64];
-  size_t signer_pubkey_len;
-} secure_boot_image_t;
+  uint32_t version;
+  uint32_t payload_size;
+} secure_boot_manifest_t;
 
-void secure_boot_init(uint32_t minimum_allowed_version);
-bool secure_boot_set_minimum_version(uint32_t minimum_allowed_version);
-uint32_t secure_boot_get_minimum_version(void);
-bool secure_boot_verify_image(const secure_boot_image_t *image);
+typedef struct {
+  bool enforce_signature;
+  bool enforce_antiroolback;
+  uint32_t min_allowed_version;
+} secure_boot_policy_t;
+
+typedef struct {
+  bool signature_valid;
+  bool antiroolback_ok;
+  bool accepted;
+} secure_boot_result_t;
+
+void secure_boot_init(void);
+void secure_boot_set_policy(const secure_boot_policy_t *policy);
+bool secure_boot_set_signing_pubkey(const uint8_t *pubkey, size_t pubkey_len);
+void secure_boot_set_current_version(uint32_t current_version);
+bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
+                                 const uint8_t *payload_hash,
+                                 size_t payload_hash_len,
+                                 secure_boot_result_t *out_result);
 
 #endif /* SECURE_BOOT_H */

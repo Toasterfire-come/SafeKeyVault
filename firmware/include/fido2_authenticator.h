@@ -6,25 +6,29 @@
 #include <stdint.h>
 
 typedef struct {
-  bool initialized;
-  bool resident_key_supported;
-  bool user_verification_supported;
-  bool attestation_supported;
-} fido2_capabilities_t;
+  uint8_t id[32];
+  size_t id_len;
+  uint8_t public_key[64];
+  size_t public_key_len;
+} fido2_credential_t;
+
+typedef struct {
+  uint8_t signature[64];
+  size_t signature_len;
+  uint8_t user_handle[32];
+  size_t user_handle_len;
+  uint32_t sign_count;
+} fido2_assertion_t;
 
 void fido2_authenticator_init(void);
-fido2_capabilities_t fido2_authenticator_capabilities(void);
-
-bool fido2_make_credential(const uint8_t *client_data_hash,
-                           size_t hash_len,
-                           const uint8_t *rp_id,
-                           size_t rp_id_len,
-                           uint8_t *credential_id,
-                           size_t *credential_id_len);
-
-bool fido2_get_assertion(const uint8_t *rp_id,
-                         size_t rp_id_len,
-                         uint8_t *assertion_sig,
-                         size_t *assertion_sig_len);
+bool fido2_create_credential(const char *rp_id,
+                             const char *user_name,
+                             const uint8_t *challenge,
+                             size_t challenge_len,
+                             fido2_credential_t *out_credential);
+bool fido2_get_assertion(const char *rp_id,
+                         const uint8_t *challenge,
+                         size_t challenge_len,
+                         fido2_assertion_t *out_assertion);
 
 #endif /* FIDO2_AUTHENTICATOR_H */

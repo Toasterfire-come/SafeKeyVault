@@ -1,83 +1,131 @@
 #include "storage_backend.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "security_utils.h"
+typedef struct {
+  bool valid;
+  uint32_t generation;
+  uint32_t schema_version;
+  size_t payload_len;
+  uint8_t payload[STORAGE_BACKEND_MAX_PAYLOAD];
+} storage_slot_internal_t;
 
 typedef struct {
   bool initialized;
-  bool has_data;
-  uint32_t generation;
-  uint32_t rollback_guard;
-  storage_record_t record;
-} storage_state_t;
+  storage_slot_internal_t slots[STORAGE_BACKEND_SLOTS];
+} storage_backend_state_t;
 
-static storage_state_t g_storage;
+static storage_backend_state_t g_storage_backend;
 
-static uint32_t storage_crc32(const storage_record_t *record) {
-  if (record == NULL) {
+static bool slot_newer(const storage_slot_internal_t *a,
+                       const storage_slot_internal_t *b) {
+  if (a == NULL || !a->valid) {
+    return false;
+  }
+  if (b == NULL || !b->valid) {
+    return true;
+  }
+  return a->generation > b->generation;
+}
+
+static size_t latest_slot_index(void) {
+  if (!g_storage_backend.slots[0].valid && !g_storage_backend.slots[1].valid) {
     return 0u;
   }
-  return security_fnv1a32((const uint8_t *)record->payload, record->payload_len);
+  return slot_newer(&g_storage_backend.slots[0], &g_storage_backend.slots[1]) ? 0u : 1u;
 }
 
 void storage_backend_init(void) {
-  memset(&g_storage, 0, sizeof(g_storage));
-  g_storage.initialized = true;
+  memset(&g_storage_backend, 0, sizeof(g_storage_backend));
+  g_storage_backend.initialized = true;
 }
 
-bool storage_backend_write_atomic(const storage_record_t *record) {
-  if (!g_storage.initialized || record == NULL) {
+bool storage_backend_write_atomic(const uint8_t *payload,
+                                  size_t payload_len,
+                                  uint32_t schema_version) {
+  size_t write_idx;
+  uint32_t next_generation = 1u;
+
+  if (!g_storage_backend.initialized || payload == NULL) {
     return false;
   }
-  if (record->payload_len == 0u || record->payload_len > STORAGE_BACKEND_MAX_PAYLOAD) {
+  if (payload_len == 0u || payload_len > STORAGE_BACKEND_MAX_PAYLOAD) {
     return false;
   }
-  if (record->version == 0u) {
+  if (schema_version == 0u) {
     return false;
   }
-  if (record->rollback_counter < g_storage.rollback_guard) {
-    return false;
+
+  if (g_storage_backend.slots[0].valid || g_storage_backend.slots[1].valid) {
+    size_t latest = latest_slot_index();
+    next_generation = g_storage_backend.slots[latest].generation + 1u;
   }
-  if (record->generation < g_storage.generation) {
-    return false;
-  }
-  if (storage_crc32(record) != record->crc32) {
-    return false;
-  }
-  g_storage.record = *record;
-  g_storage.generation = record->generation;
-  g_storage.rollback_guard = record->rollback_counter;
-  g_storage.has_data = true;
+
+  write_idx = slot_newer(&g_storage_backend.slots[0], &g_storage_backend.slots[1]) ? 1u : 0u;
+  memset(&g_storage_backend.slots[write_idx], 0, sizeof(g_storage_backend.slots[write_idx]));
+  g_storage_backend.slots[write_idx].valid = true;
+  g_storage_backend.slots[write_idx].generation = next_generation;
+  g_storage_backend.slots[write_idx].schema_version = schema_version;
+  g_storage_backend.slots[write_idx].payload_len = payload_len;
+  memcpy(g_storage_backend.slots[write_idx].payload, payload, payload_len);
   return true;
 }
 
-bool storage_backend_read_latest(storage_record_t *out_record) {
-  if (!g_storage.initialized || !g_storage.has_data || out_record == NULL) {
+bool storage_backend_read_latest(uint8_t *out_payload,
+                                 size_t out_capacity,
+                                 size_t *out_len,
+                                 uint32_t *out_schema_version) {
+  size_t idx;
+  const storage_slot_internal_t *slot;
+  if (!g_storage_backend.initialized || out_payload == NULL ||
+      out_len == NULL || out_schema_version == NULL) {
     return false;
   }
-  if (storage_crc32(&g_storage.record) != g_storage.record.crc32) {
+  idx = latest_slot_index();
+  slot = &g_storage_backend.slots[idx];
+  if (!slot->valid || slot->payload_len == 0u || slot->payload_len > out_capacity) {
     return false;
   }
-  *out_record = g_storage.record;
+  memcpy(out_payload, slot->payload, slot->payload_len);
+  *out_len = slot->payload_len;
+  *out_schema_version = slot->schema_version;
+  return true;
+}
+
+bool storage_backend_debug_state(storage_backend_debug_t *out_debug) {
+  if (out_debug == NULL) {
+    return false;
+  }
+  out_debug->slot_a_valid = g_storage_backend.slots[0].valid;
+  out_debug->slot_b_valid = g_storage_backend.slots[1].valid;
+  out_debug->slot_a_generation = g_storage_backend.slots[0].generation;
+  out_debug->slot_b_generation = g_storage_backend.slots[1].generation;
+  return true;
+}
+
+bool storage_backend_debug_corrupt_latest(void) {
+  size_t idx;
+  storage_slot_internal_t *slot;
+  if (!g_storage_backend.initialized) {
+    return false;
+  }
+  idx = latest_slot_index();
+  slot = &g_storage_backend.slots[idx];
+  if (!slot->valid || slot->payload_len == 0u) {
+    return false;
+  }
+  slot->payload[0] ^= 0x7Au;
   return true;
 }
 
 bool storage_backend_wipe(void) {
-  if (!g_storage.initialized) {
+  if (!g_storage_backend.initialized) {
     return false;
   }
-  security_secure_zero(&g_storage, sizeof(g_storage));
-  g_storage.initialized = true;
-  return true;
-}
-
-bool storage_backend_debug_corrupt(void) {
-  if (!g_storage.initialized || !g_storage.has_data || g_storage.record.payload_len == 0u) {
-    return false;
-  }
-  g_storage.record.payload[0] ^= 0x7Au;
+  memset(&g_storage_backend, 0, sizeof(g_storage_backend));
+  g_storage_backend.initialized = true;
   return true;
 }

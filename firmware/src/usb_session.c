@@ -5,95 +5,152 @@
 #include <string.h>
 
 #include "crypto_engine.h"
+#include "security_utils.h"
 
-#define SESSION_NONCE_WINDOW 32u
+static usb_session_state_t g_session;
 
-typedef struct {
-  bool active;
-  uint32_t session_id;
-  uint8_t session_key[32];
-  uint8_t accepted_nonces[SESSION_NONCE_WINDOW];
-} usb_session_state_t;
-
-static usb_session_state_t g_usb_session;
-
-static bool nonce_seen(uint8_t nonce) {
-  size_t i;
-  for (i = 0u; i < SESSION_NONCE_WINDOW; ++i) {
-    if (g_usb_session.accepted_nonces[i] == nonce) {
-      return true;
-    }
+static void build_session_aad(const usb_session_state_t *state,
+                              uint32_t counter,
+                              uint8_t aad[16]) {
+  memset(aad, 0, 16u);
+  if (state != NULL) {
+    memcpy(aad, &state->session_id, sizeof(state->session_id));
   }
-  return false;
+  memcpy(aad + 4u, &counter, sizeof(counter));
 }
 
-static void nonce_remember(uint8_t nonce) {
-  memmove(&g_usb_session.accepted_nonces[1],
-          &g_usb_session.accepted_nonces[0],
-          SESSION_NONCE_WINDOW - 1u);
-  g_usb_session.accepted_nonces[0] = nonce;
-}
+static uint32_t g_expected_client_counter;
+static uint8_t g_challenge[16];
+static size_t g_challenge_len;
 
 void usb_session_init(void) {
-  memset(&g_usb_session, 0, sizeof(g_usb_session));
+  memset(&g_session, 0, sizeof(g_session));
+  g_expected_client_counter = 0u;
+  memset(g_challenge, 0, sizeof(g_challenge));
+  g_challenge_len = 0u;
 }
 
-bool usb_session_start(uint32_t session_id,
-                       const uint8_t *client_nonce,
-                       size_t client_nonce_len) {
-  uint8_t salt[16] = {0};
-  if (client_nonce == NULL || client_nonce_len == 0u) {
+bool usb_session_start(usb_session_challenge_t *out_challenge) {
+  uint8_t seed[16] = {0};
+  uint8_t hash[16] = {0};
+  if (out_challenge == NULL) {
     return false;
   }
-  memset(&g_usb_session, 0, sizeof(g_usb_session));
-  if (client_nonce_len > sizeof(salt)) {
-    client_nonce_len = sizeof(salt);
-  }
-  memcpy(salt, client_nonce, client_nonce_len);
-  if (!crypto_engine_derive_pin_key("session-bootstrap",
-                                    salt,
-                                    sizeof(salt),
-                                    g_usb_session.session_key)) {
-    return false;
-  }
-  g_usb_session.active = true;
-  g_usb_session.session_id = session_id;
+  memset(&g_session, 0, sizeof(g_session));
+  g_session.session_id = 1u;
+  g_expected_client_counter = 1u;
+  g_session.authenticated = false;
+  g_challenge_len = 16u;
+  memcpy(seed, "usb-session-seed", 16u);
+  crypto_engine_hash16(seed, sizeof(seed), hash);
+  memcpy(g_challenge, hash, 16u);
+  out_challenge->session_id = g_session.session_id;
+  out_challenge->challenge_len = g_challenge_len;
+  memcpy(out_challenge->challenge, g_challenge, g_challenge_len);
+  security_secure_zero(seed, sizeof(seed));
+  security_secure_zero(hash, sizeof(hash));
   return true;
 }
 
-bool usb_session_is_active(void) {
-  return g_usb_session.active;
+bool usb_session_debug_compute_expected_response(const usb_session_challenge_t *challenge,
+                                                 uint8_t *out_response,
+                                                 size_t out_len) {
+  uint8_t digest[16];
+  if (challenge == NULL || out_response == NULL || out_len < 16u) {
+    return false;
+  }
+  crypto_engine_hash16(challenge->challenge, challenge->challenge_len, digest);
+  memcpy(out_response, digest, 16u);
+  security_secure_zero(digest, sizeof(digest));
+  return true;
 }
 
-bool usb_session_verify_frame(const uint8_t *frame,
-                              size_t frame_len,
-                              uint8_t nonce,
-                              const uint8_t tag[16]) {
+bool usb_session_authenticate(const uint8_t *host_response, size_t response_len) {
+  usb_session_challenge_t current = {0};
   uint8_t expected[16];
-  size_t out_len = sizeof(expected);
-  if (!g_usb_session.active || frame == NULL || tag == NULL || frame_len == 0u) {
+  if (host_response == NULL || response_len < 16u) {
     return false;
   }
-  if (nonce_seen(nonce)) {
+  current.session_id = g_session.session_id;
+  current.challenge_len = g_challenge_len;
+  memcpy(current.challenge, g_challenge, current.challenge_len);
+  if (!usb_session_debug_compute_expected_response(&current, expected, sizeof(expected))) {
     return false;
   }
-  if (!crypto_engine_encrypt_aead(frame,
-                                  frame_len,
-                                  g_usb_session.session_key,
-                                  sizeof(g_usb_session.session_key),
-                                  expected,
-                                  sizeof(expected),
-                                  &out_len,
-                                  expected)) {
+  if (!sec_consttime_memeq(expected, host_response, 16u)) {
+    security_secure_zero(expected, sizeof(expected));
     return false;
   }
-  if (out_len < 16u || memcmp(expected, tag, 16u) != 0) {
+  g_session.authenticated = true;
+  security_secure_zero(expected, sizeof(expected));
+  return true;
+}
+
+bool usb_session_is_authenticated(void) {
+  return g_session.authenticated;
+}
+
+bool usb_session_get_state(usb_session_state_t *out_state) {
+  if (out_state == NULL) {
     return false;
   }
-  nonce_remember(nonce);
+  *out_state = g_session;
+  return true;
+}
+
+bool usb_session_sign_payload(const uint8_t *payload,
+                              size_t payload_len,
+                              uint8_t *out_mac,
+                              size_t mac_len) {
+  uint8_t aad[16];
+  uint8_t scratch[32];
+  size_t scratch_len = sizeof(scratch);
+  if (!g_session.authenticated || payload == NULL || out_mac == NULL || mac_len < 16u) {
+    return false;
+  }
+  build_session_aad(&g_session, g_expected_client_counter, aad);
+  if (!crypto_engine_encrypt_aead(payload, payload_len,
+                                  aad, sizeof(aad),
+                                  scratch, sizeof(scratch), &scratch_len, out_mac)) {
+    return false;
+  }
+  security_secure_zero(scratch, sizeof(scratch));
+  security_secure_zero(aad, sizeof(aad));
+  return true;
+}
+
+bool usb_session_verify_payload(const uint8_t *payload,
+                                size_t payload_len,
+                                const uint8_t *mac,
+                                size_t mac_len) {
+  uint8_t expected[16];
+  uint8_t aad[16];
+  uint8_t scratch[32];
+  size_t scratch_len = sizeof(scratch);
+  if (!g_session.authenticated || payload == NULL || mac == NULL || mac_len < 16u) {
+    return false;
+  }
+  build_session_aad(&g_session, g_expected_client_counter, aad);
+  if (!crypto_engine_encrypt_aead(payload, payload_len,
+                                  aad, sizeof(aad),
+                                  scratch, sizeof(scratch), &scratch_len, expected)) {
+    return false;
+  }
+  security_secure_zero(scratch, sizeof(scratch));
+  security_secure_zero(aad, sizeof(aad));
+  if (!sec_consttime_memeq(expected, mac, 16u)) {
+    security_secure_zero(expected, sizeof(expected));
+    return false;
+  }
+  g_expected_client_counter++;
+  g_session.verified_frames = g_expected_client_counter - 1u;
+  security_secure_zero(expected, sizeof(expected));
   return true;
 }
 
 void usb_session_end(void) {
-  memset(&g_usb_session, 0, sizeof(g_usb_session));
+  security_secure_zero(&g_session, sizeof(g_session));
+  g_expected_client_counter = 0u;
+  security_secure_zero(g_challenge, sizeof(g_challenge));
+  g_challenge_len = 0u;
 }

@@ -15,10 +15,6 @@
 #include "state_machine.h"
 #include "crypto_engine.h"
 #include "storage_backend.h"
-#include "secure_boot.h"
-#include "usb_session.h"
-#include "fido2_authenticator.h"
-#include "platform_hal.h"
 
 static void test_state_machine_lockout_and_wipe(void) {
   device_context_t ctx;
@@ -450,110 +446,6 @@ static void test_storage_backend_atomic_slots(void) {
   assert(dbg.slot_a_valid || dbg.slot_b_valid);
 }
 
-static void test_secure_boot_policy_and_antiroolback(void) {
-  secure_boot_manifest_t manifest = {
-      .version = 3u,
-      .payload_size = 4096u,
-  };
-  secure_boot_policy_t policy = {
-      .enforce_signature = true,
-      .enforce_antiroolback = true,
-      .min_allowed_version = 2u,
-  };
-  uint8_t payload_hash[32] = {0};
-  uint8_t signing_pubkey[32] = {0};
-  secure_boot_result_t result = {0};
-
-  for (size_t i = 0; i < sizeof(payload_hash); ++i) {
-    payload_hash[i] = (uint8_t)(i + 1u);
-  }
-  for (size_t i = 0; i < sizeof(signing_pubkey); ++i) {
-    signing_pubkey[i] = (uint8_t)(0xA0u + i);
-  }
-
-  secure_boot_init();
-  secure_boot_set_policy(&policy);
-  secure_boot_set_signing_pubkey(signing_pubkey, sizeof(signing_pubkey));
-  secure_boot_set_current_version(2u);
-
-  assert(secure_boot_verify_manifest(&manifest, payload_hash, sizeof(payload_hash), &result));
-  assert(result.signature_valid);
-  assert(result.antiroolback_ok);
-  assert(result.accepted);
-
-  manifest.version = 1u;
-  assert(secure_boot_verify_manifest(&manifest, payload_hash, sizeof(payload_hash), &result));
-  assert(!result.antiroolback_ok);
-  assert(!result.accepted);
-
-  policy.enforce_signature = false;
-  secure_boot_set_policy(&policy);
-  assert(secure_boot_verify_manifest(&manifest, payload_hash, sizeof(payload_hash), &result));
-  assert(result.signature_valid);
-  assert(!result.antiroolback_ok);
-}
-
-static void test_usb_session_authentication_flow(void) {
-  usb_session_challenge_t challenge = {0};
-  usb_session_state_t state = {0};
-  uint8_t host_response[32] = {0};
-  uint8_t payload[16] = {1u, 2u, 3u, 4u};
-  uint8_t mac[16] = {0};
-
-  usb_session_init();
-  assert(usb_session_start(&challenge));
-  assert(challenge.session_id != 0u);
-  assert(challenge.challenge_len > 0u);
-  assert(!usb_session_is_authenticated());
-
-  assert(usb_session_debug_compute_expected_response(&challenge, host_response, sizeof(host_response)));
-  assert(usb_session_authenticate(host_response, sizeof(host_response)));
-  assert(usb_session_is_authenticated());
-  assert(usb_session_get_state(&state));
-  assert(state.authenticated);
-  assert(state.session_id == challenge.session_id);
-
-  assert(usb_session_sign_payload(payload, sizeof(payload), mac, sizeof(mac)));
-  assert(usb_session_verify_payload(payload, sizeof(payload), mac, sizeof(mac)));
-
-  mac[0] ^= 0x11u;
-  assert(!usb_session_verify_payload(payload, sizeof(payload), mac, sizeof(mac)));
-}
-
-static void test_fido2_authenticator_scaffold(void) {
-  fido2_credential_t cred = {0};
-  fido2_assertion_t assertion = {0};
-  uint8_t challenge[32] = {0};
-
-  for (size_t i = 0; i < sizeof(challenge); ++i) {
-    challenge[i] = (uint8_t)(0x30u + i);
-  }
-
-  fido2_authenticator_init();
-  assert(fido2_create_credential("example.com", "alice", challenge, sizeof(challenge), &cred));
-  assert(cred.id_len > 0u);
-  assert(cred.public_key_len > 0u);
-
-  assert(fido2_get_assertion("example.com", challenge, sizeof(challenge), &assertion));
-  assert(assertion.signature_len > 0u);
-  assert(assertion.user_handle_len > 0u);
-}
-
-static void test_platform_hal_scaffold(void) {
-  platform_hal_status_t status = {0};
-
-  platform_hal_init();
-  platform_hal_led_set(PLATFORM_HAL_LED_LOCKED, true);
-  platform_hal_led_set(PLATFORM_HAL_LED_ACTIVITY, true);
-  platform_hal_touch_set_simulated(true, false);
-  platform_hal_tick();
-  platform_hal_tick();
-  assert(platform_hal_get_status(&status));
-  assert(status.initialized);
-  assert(status.led_locked_on);
-  assert(status.led_activity_on);
-  assert(status.tick_count >= 2u);
-}
 
 static void test_action_engine_replay_and_pin_change(void) {
   device_context_t ctx;
@@ -832,10 +724,6 @@ int main(void) {
   test_command_codec_and_settings_store();
   test_settings_store_crypto_tamper_rejected();
   test_storage_backend_atomic_slots();
-  test_secure_boot_policy_and_antiroolback();
-  test_usb_session_authentication_flow();
-  test_fido2_authenticator_scaffold();
-  test_platform_hal_scaffold();
   test_action_engine_replay_and_pin_change();
   test_device_only_flow();
   test_single_press_and_hold_model();

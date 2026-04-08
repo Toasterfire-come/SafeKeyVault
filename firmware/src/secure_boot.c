@@ -5,13 +5,15 @@
 #include <string.h>
 
 #include "crypto_engine.h"
+#include "security_utils.h"
 
 typedef struct {
   bool initialized;
-  bool key_set;
-  uint8_t verify_key[64];
-  size_t verify_key_len;
-  uint32_t min_allowed_version;
+  secure_boot_policy_t policy;
+  uint8_t signing_pubkey[64];
+  size_t signing_pubkey_len;
+  bool signing_key_set;
+  uint32_t current_version;
 } secure_boot_state_t;
 
 static secure_boot_state_t g_secure_boot;
@@ -21,51 +23,78 @@ void secure_boot_init(void) {
   g_secure_boot.initialized = true;
 }
 
-void secure_boot_set_min_version(uint32_t min_version) {
+void secure_boot_set_policy(const secure_boot_policy_t *policy) {
   if (!g_secure_boot.initialized) {
     secure_boot_init();
   }
-  g_secure_boot.min_allowed_version = min_version;
+  if (policy == NULL) {
+    return;
+  }
+  g_secure_boot.policy = *policy;
 }
 
-bool secure_boot_set_verify_key(const uint8_t *key, size_t key_len) {
-  if (key == NULL || key_len == 0u || key_len > sizeof(g_secure_boot.verify_key)) {
+void secure_boot_set_current_version(uint32_t version) {
+  if (!g_secure_boot.initialized) {
+    secure_boot_init();
+  }
+  g_secure_boot.current_version = version;
+}
+
+bool secure_boot_set_signing_pubkey(const uint8_t *pubkey, size_t pubkey_len) {
+  if (pubkey == NULL || pubkey_len == 0u || pubkey_len > sizeof(g_secure_boot.signing_pubkey)) {
     return false;
   }
   if (!g_secure_boot.initialized) {
     secure_boot_init();
   }
-  memcpy(g_secure_boot.verify_key, key, key_len);
-  g_secure_boot.verify_key_len = key_len;
-  g_secure_boot.key_set = true;
+  memcpy(g_secure_boot.signing_pubkey, pubkey, pubkey_len);
+  g_secure_boot.signing_pubkey_len = pubkey_len;
+  g_secure_boot.signing_key_set = true;
   return true;
 }
 
-bool secure_boot_verify_image(const secure_boot_image_t *image,
-                              const uint8_t *signature,
-                              size_t signature_len) {
-  uint8_t digest[16];
+bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
+                                 const uint8_t *payload_hash,
+                                 size_t payload_hash_len,
+                                 secure_boot_result_t *out_result) {
   uint8_t expected_sig[16];
-  if (!g_secure_boot.initialized || image == NULL || signature == NULL) {
+  size_t i;
+
+  if (out_result == NULL) {
     return false;
   }
-  if (!g_secure_boot.key_set) {
+  memset(out_result, 0, sizeof(*out_result));
+  if (!g_secure_boot.initialized || manifest == NULL || payload_hash == NULL) {
     return false;
   }
-  if (image->payload == NULL || image->payload_len == 0u) {
+  if (payload_hash_len == 0u) {
     return false;
   }
-  if (image->version < g_secure_boot.min_allowed_version) {
-    return false;
-  }
-  if (signature_len != sizeof(expected_sig)) {
-    return false;
+  if (g_secure_boot.policy.enforce_antiroolback) {
+    out_result->antiroolback_ok =
+        (manifest->version >= g_secure_boot.policy.min_allowed_version) &&
+        (manifest->version >= g_secure_boot.current_version);
+  } else {
+    out_result->antiroolback_ok = true;
   }
 
-  crypto_engine_hash16(image->payload, image->payload_len, digest);
-  for (size_t i = 0u; i < sizeof(expected_sig); ++i) {
-    expected_sig[i] = digest[i] ^ g_secure_boot.verify_key[i % g_secure_boot.verify_key_len];
+  if (!g_secure_boot.policy.enforce_signature) {
+    out_result->signature_valid = true;
+  } else {
+    if (!g_secure_boot.signing_key_set) {
+      out_result->signature_valid = false;
+    } else {
+      memset(expected_sig, 0, sizeof(expected_sig));
+      for (i = 0u; i < sizeof(expected_sig) && i < payload_hash_len; ++i) {
+        expected_sig[i] = payload_hash[i] ^ g_secure_boot.signing_pubkey[i % g_secure_boot.signing_pubkey_len];
+      }
+      out_result->signature_valid = sec_consttime_memeq(expected_sig,
+                                                        payload_hash,
+                                                        sizeof(expected_sig));
+    }
   }
-  return sec_consttime_memeq(expected_sig, signature, sizeof(expected_sig));
+
+  out_result->accepted = out_result->signature_valid && out_result->antiroolback_ok;
+  return true;
 }
 
