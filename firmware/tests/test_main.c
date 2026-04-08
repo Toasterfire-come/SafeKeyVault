@@ -141,6 +141,34 @@ static void test_browser_suspicious_origin(void) {
   assert(res.touch_required);
 }
 
+static void test_browser_protocol_field_validation(void) {
+  BrowserCommand cmd = {0};
+  BrowserCommandResult res = {0};
+
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://valid.example", sizeof(cmd.origin) - 1u);
+  strncpy(cmd.username, "alice", sizeof(cmd.username) - 1u);
+  strncpy(cmd.password, "ValidPass9!", sizeof(cmd.password) - 1u);
+  assert(browser_validate_command(&cmd, &res));
+  assert(res.accepted);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://valid.example", sizeof(cmd.origin) - 1u);
+  strncpy(cmd.username, "alice\nbob", sizeof(cmd.username) - 1u);
+  strncpy(cmd.password, "ValidPass9!", sizeof(cmd.password) - 1u);
+  assert(!browser_validate_command(&cmd, &res));
+  assert(strstr(res.message, "unsafe field chars") != NULL);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://valid.example", sizeof(cmd.origin) - 1u);
+  strncpy(cmd.username, "alice", sizeof(cmd.username) - 1u);
+  strncpy(cmd.password, "https://evil.example/steal", sizeof(cmd.password) - 1u);
+  assert(!browser_validate_command(&cmd, &res));
+  assert(strstr(res.message, "unsafe field chars") != NULL);
+}
+
 static void test_action_engine_fill_save_generate_select(void) {
   device_context_t ctx;
   vault_t vault;
@@ -421,6 +449,7 @@ int main(void) {
   test_vault_and_reuse_detection();
   test_state_machine_touch_gate();
   test_browser_suspicious_origin();
+  test_browser_protocol_field_validation();
   test_action_engine_fill_save_generate_select();
   test_action_engine_auto_popup_modes();
   test_action_engine_ui_feedback_mapping();

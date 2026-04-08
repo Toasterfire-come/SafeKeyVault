@@ -23,6 +23,17 @@ static bool is_https(const char *origin) {
   return strncmp(origin, "https://", 8) == 0;
 }
 
+static bool is_safe_ascii_text(const char *value, size_t max_len) {
+  size_t len = bounded_strlen(value, max_len);
+  for (size_t i = 0; i < len; ++i) {
+    unsigned char c = (unsigned char)value[i];
+    if (c < 32u || c == 127u) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool browser_origin_is_suspicious(const char *origin) {
   if (origin == NULL || origin[0] == '\0') {
     return true;
@@ -63,6 +74,10 @@ static bool command_has_required_fields(const BrowserCommand *cmd) {
 }
 
 bool browser_validate_command(const BrowserCommand *cmd, BrowserCommandResult *result) {
+  size_t origin_len;
+  size_t username_len;
+  size_t password_len;
+
   if (cmd == NULL || result == NULL) {
     return false;
   }
@@ -76,11 +91,27 @@ bool browser_validate_command(const BrowserCommand *cmd, BrowserCommandResult *r
     return false;
   }
 
-  /* Reject oversized field payloads early to reduce parser abuse surface. */
-  if (bounded_strlen(cmd->origin, sizeof(cmd->origin)) >= sizeof(cmd->origin) ||
-      bounded_strlen(cmd->username, sizeof(cmd->username)) >= sizeof(cmd->username) ||
-      bounded_strlen(cmd->password, sizeof(cmd->password)) >= sizeof(cmd->password)) {
+  origin_len = bounded_strlen(cmd->origin, sizeof(cmd->origin));
+  username_len = bounded_strlen(cmd->username, sizeof(cmd->username));
+  password_len = bounded_strlen(cmd->password, sizeof(cmd->password));
+
+  /* Reject non-terminated/oversized field payloads early to reduce parser abuse surface. */
+  if (origin_len >= sizeof(cmd->origin) ||
+      username_len >= sizeof(cmd->username) ||
+      password_len >= sizeof(cmd->password)) {
     (void) snprintf(result->message, sizeof(result->message), "field too long");
+    return false;
+  }
+
+  if (!is_safe_ascii_text(cmd->origin, sizeof(cmd->origin)) ||
+      !is_safe_ascii_text(cmd->username, sizeof(cmd->username)) ||
+      !is_safe_ascii_text(cmd->password, sizeof(cmd->password))) {
+    (void) snprintf(result->message, sizeof(result->message), "invalid characters");
+    return false;
+  }
+
+  if (username_len > 0u && username_len < 2u) {
+    (void) snprintf(result->message, sizeof(result->message), "username too short");
     return false;
   }
 

@@ -17,11 +17,14 @@
 - Optional wipe state after repeated failures.
 - Command validation and bounded decoding.
 - Basic rate limiting.
+- Monotonic nonce replay rejection in action engine.
+- Browser extension command allowlist with privileged HID only in background service worker.
 
 ## Known gaps
 - Crypto is currently test-stubbed, not production AEAD.
 - No secure boot / signed update flow yet.
 - No production ATECC608A integration yet.
+- No authenticated HID session/channel binding yet (nonce protects replay, not full MITM).
 
 ## Non-negotiable security invariants
 1. Do not output credentials while locked or wiped.

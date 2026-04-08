@@ -5,39 +5,52 @@ firmware command codec module.
 
 ## Frame format
 
-- Byte 0: command type (`BrowserCommandType`)
-- Byte 1: origin length (0..95)
-- Byte 2: username length (0..95)
-- Byte 3: password length (0..127)
-- Bytes 4..N: UTF-8 payload blobs:
-  - origin bytes
-  - username bytes
-  - password bytes
+Current host-side framing is ASCII key/value pairs:
 
-Maximum frame length is 320 bytes.
+- `type=<COMMAND>;nonce=<N>;origin=<...>;username=<...>;password=<...>`
+
+Rules:
+
+- fields are separated by `;`
+- key/value pairs are separated by `=`
+- unsupported keys are rejected
+- missing required fields are rejected
+- maximum decoded frame size is `COMMAND_CODEC_MAX_FRAME` (512 bytes)
+
+`nonce` is a monotonic unsigned integer maintained by the extension
+background worker and used by firmware to block replayed commands.
 
 ## Commands
+
+Supported command types:
 
 - `REQUEST_FILL`: origin required
 - `REQUEST_SAVE`: origin + username + password required
 - `REQUEST_GENERATE`: origin required, username optional
 - `REQUEST_SELECT_NEXT`: no required payloads
 
+Extension control messages that map to device commands but are not part of
+the firmware `BrowserCommandType` enum include:
+
+- `arm_manual_popup`
+- `confirm_tap`
+- `confirm_hold`
+- `change_pin`
+
 ## Validation
 
-The device side rejects frames when:
+The firmware rejects commands when:
 
-- payload lengths exceed field capacity
-- command type is invalid
-- required fields are missing
-- total frame size is inconsistent with encoded lengths
-
-Decoded commands are subsequently validated by browser protocol risk checks
-(HTTPS requirement, suspicious origin checks).
+- command type is unknown/unsupported
+- required fields are missing for that command type
+- field values exceed fixed buffer sizes
+- origin fails suspicious-origin checks (must be HTTPS and sane)
+- nonce is stale (`nonce <= last_nonce`) when replay protection is active
 
 ## Security notes
 
-- Protocol intentionally does not support generic "type arbitrary string".
+- Protocol intentionally does not support arbitrary "type text" output.
 - Sensitive operations remain touch/hold gated in firmware action engine.
-- For production, wrap this command codec with replay protection and an
-  authenticated transport/session layer.
+- Browser page JS is untrusted; the extension is the only allowed path to HID.
+- Current implementation has replay blocking via nonce. Production hardening
+  should add authenticated transport/session semantics on top.

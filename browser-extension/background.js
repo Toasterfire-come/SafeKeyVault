@@ -5,6 +5,9 @@ const PRODUCT_ID = 0x2040;
 const REPORT_ID = 1;
 const MAX_PAYLOAD = 190;
 const NONCE_KEY = "lastNonce";
+const MAX_ORIGIN = 95;
+const MAX_USERNAME = 95;
+const MAX_PASSWORD = 127;
 
 let device = null;
 let nonce = 1;
@@ -58,6 +61,20 @@ async function sendCommand(command) {
   nonce += 1;
 }
 
+function sanitizeField(value, maxLen) {
+  const text = String(value || "");
+  return text.slice(0, maxLen);
+}
+
+function isHttpsOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (!msg || typeof msg !== "object") {
@@ -90,27 +107,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 
     if (msg.type === "REQUEST_FILL") {
-      await sendCommand({ t: "request_fill", origin: msg.origin || "" });
+      const origin = sanitizeField(msg.origin, MAX_ORIGIN);
+      if (!isHttpsOrigin(origin)) {
+        throw new Error("origin must be https");
+      }
+      await sendCommand({ t: "request_fill", origin });
       sendResponse({ ok: true });
       return;
     }
 
     if (msg.type === "REQUEST_SAVE") {
+      const origin = sanitizeField(msg.origin, MAX_ORIGIN);
+      const username = sanitizeField(msg.username, MAX_USERNAME);
+      const password = sanitizeField(msg.password, MAX_PASSWORD);
+      if (!isHttpsOrigin(origin)) {
+        throw new Error("origin must be https");
+      }
+      if (!username || !password) {
+        throw new Error("missing username/password");
+      }
       await sendCommand({
         t: "request_save",
-        origin: msg.origin || "",
-        username: msg.username || "",
-        password: msg.password || "",
+        origin,
+        username,
+        password,
       });
       sendResponse({ ok: true });
       return;
     }
 
     if (msg.type === "REQUEST_GENERATE") {
+      const origin = sanitizeField(msg.origin, MAX_ORIGIN);
+      const username = sanitizeField(msg.username, MAX_USERNAME);
+      if (!isHttpsOrigin(origin)) {
+        throw new Error("origin must be https");
+      }
       await sendCommand({
         t: "request_generate",
-        origin: msg.origin || "",
-        username: msg.username || "",
+        origin,
+        username,
       });
       sendResponse({ ok: true });
       return;
