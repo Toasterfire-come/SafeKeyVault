@@ -1,7 +1,7 @@
-# Browser HID Command Protocol (v1)
+# Device Input Command Protocol (v1)
 
-This document defines the browser-to-device command encoding used by the
-firmware command codec module.
+This document defines the internal command encoding used by firmware modules
+for host tests and device-control paths.
 
 ## Frame format
 
@@ -17,8 +17,8 @@ Rules:
 - missing required fields are rejected
 - maximum decoded frame size is `COMMAND_CODEC_MAX_FRAME` (512 bytes)
 
-`nonce` is a monotonic unsigned integer maintained by the extension
-background worker and used by firmware to block replayed commands.
+`nonce` is optional for device-only local calls. When present on remote/control
+paths, firmware enforces monotonic progression to block replay.
 
 ## Commands
 
@@ -29,13 +29,8 @@ Supported command types:
 - `REQUEST_GENERATE`: origin required, username optional
 - `REQUEST_SELECT_NEXT`: no required payloads
 
-Extension control messages that map to device commands but are not part of
-the firmware `BrowserCommandType` enum include:
-
-- `arm_manual_popup`
-- `confirm_tap`
-- `confirm_hold`
-- `change_pin`
+Device-local control actions are exposed through direct action engine APIs
+rather than external extension messages.
 
 ## Validation
 
@@ -51,6 +46,6 @@ The firmware rejects commands when:
 
 - Protocol intentionally does not support arbitrary "type text" output.
 - Sensitive operations remain touch/hold gated in firmware action engine.
-- Browser page JS is untrusted; the extension is the only allowed path to HID.
-- Current implementation has replay blocking via nonce. Production hardening
-  should add authenticated transport/session semantics on top.
+- Current implementation has replay blocking via nonce where nonce-bearing
+  control paths are used. Production hardening should add authenticated
+  transport/session semantics for any external command ingress.

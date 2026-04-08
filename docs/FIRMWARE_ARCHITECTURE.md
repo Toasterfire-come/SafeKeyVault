@@ -3,11 +3,11 @@
 ## Core modules
 
 - `state_machine`: lock/unlock, lockout/wipe progression, touch transitions.
-- `action_engine`: executes validated browser commands with touch/hold confirmation.
+- `action_engine`: executes on-device save/fill/generate/select actions with touch/hold confirmation.
 - `password_store` + `vault`: credential storage helpers and wipe path.
 - `security_policy`: password checks (min length 8, common/reuse warning paths).
-- `browser_protocol`: origin and command validation.
-- `command_codec`: strict fixed-bounds parse/serialize for HID payload framing.
+- `browser_protocol`: retained strict input validation for origin/credential record fields.
+- `command_codec`: retained strict fixed-bounds parse/serialize for host test framing.
 - `rate_limiter`: abuse throttling primitive per command channel.
 - `settings_store`: persistent runtime settings with checksum verification.
 - `ui_feedback`: state/action -> LED/status mapping.
@@ -18,6 +18,7 @@
 - No sensitive action while locked/locked-out/wiped.
 - Touch/hold confirmations gate sensitive actions.
 - PIN failures trigger lockout, then optional wipe.
+- Plug-and-play flow is device-driven; no browser extension dependency.
 
 ## Known limitations
 

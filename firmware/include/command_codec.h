@@ -7,7 +7,7 @@
 
 #include "browser_protocol.h"
 
-/* ASCII key=value framing for browser extension control channel. */
+/* ASCII key=value framing for optional host control channel. */
 #define COMMAND_CODEC_MAX_FRAME 512u
 
 typedef struct {

@@ -51,6 +51,13 @@ typedef struct {
   bool manual_popup_armed;
 } action_engine_t;
 
+typedef enum {
+  DEVICE_OP_FILL_SELECTED = 0,
+  DEVICE_OP_SAVE_CURRENT,
+  DEVICE_OP_GENERATE_FOR_CURRENT,
+  DEVICE_OP_SELECT_NEXT
+} device_action_t;
+
 void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_t *ctx);
 bool action_engine_handle_command(action_engine_t *engine,
                                   const BrowserCommand *cmd,
@@ -59,6 +66,13 @@ bool action_engine_unlock_with_pin(action_engine_t *engine, const char *pin);
 bool action_engine_try_change_pin(action_engine_t *engine,
                                   const char *old_pin,
                                   const char *new_pin);
+bool action_engine_set_active_site(action_engine_t *engine,
+                                   const char *origin,
+                                   const char *username,
+                                   const char *password_hint);
+bool action_engine_device_request(action_engine_t *engine,
+                                  device_action_t action,
+                                  ActionResult *out);
 void action_engine_arm_manual_popup(action_engine_t *engine);
 bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out);
 bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out);

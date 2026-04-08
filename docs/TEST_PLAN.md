@@ -18,16 +18,18 @@ Coverage includes:
 - UI feedback mapping
 - command codec + rate limiter + constant-time compare checks
 
-## Browser extension checks
+## Device-only workflow checks
 
 Manual verification:
-- extension loads in Chromium from unpacked directory
-- popup opens and can connect via WebHID
-- content script can detect basic login forms
-- only background script performs privileged HID operations
+- plug device over USB-C and confirm standard HID keyboard enumeration
+- unlock with 5-digit PIN from on-device input path
+- save credential via on-device flow and confirm touch/hold authorization
+- fill current-site credential through on-device action (touch-gated typing)
+- generate password on-device for new origin and save via hold confirmation
+- select next credential using hold gesture and verify next fill behavior
 
 Security checks:
-- no `eval`/remote code
-- minimal permissions
-- no direct page JS to HID path
+- no dependency on browser extension or host companion app
+- all sensitive actions require physical interaction
+- lockout/wipe/autolock behavior remains enforced
 

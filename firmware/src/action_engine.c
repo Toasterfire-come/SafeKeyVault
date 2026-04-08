@@ -461,3 +461,88 @@ bool action_engine_try_change_pin(action_engine_t *engine,
   state_machine_set_pin_verifier(g_pin_verifier);
   return true;
 }
+
+bool action_engine_device_save_credential(action_engine_t *engine,
+                                          const char *origin,
+                                          const char *username,
+                                          const char *password,
+                                          ActionResult *out) {
+  BrowserCommand cmd;
+  if (!is_engine_ready(engine) || origin == NULL || username == NULL || password == NULL || out == NULL) {
+    return false;
+  }
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  (void)strncpy(cmd.origin, origin, sizeof(cmd.origin) - 1u);
+  (void)strncpy(cmd.username, username, sizeof(cmd.username) - 1u);
+  (void)strncpy(cmd.password, password, sizeof(cmd.password) - 1u);
+  cmd.nonce = 0u;
+  if (!action_engine_handle_command(engine, &cmd, out)) {
+    return false;
+  }
+  if (!out->allowed) {
+    return true;
+  }
+  return action_engine_confirm_hold(engine, out);
+}
+
+bool action_engine_device_fill_current(action_engine_t *engine,
+                                       const char *origin,
+                                       ActionResult *out) {
+  BrowserCommand cmd;
+  if (!is_engine_ready(engine) || origin == NULL || out == NULL) {
+    return false;
+  }
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_FILL;
+  (void)strncpy(cmd.origin, origin, sizeof(cmd.origin) - 1u);
+  cmd.nonce = 0u;
+  if (!action_engine_handle_command(engine, &cmd, out)) {
+    return false;
+  }
+  if (!out->allowed) {
+    return true;
+  }
+  return action_engine_confirm_hold(engine, out);
+}
+
+bool action_engine_device_generate_for_origin(action_engine_t *engine,
+                                              const char *origin,
+                                              const char *username,
+                                              ActionResult *out) {
+  BrowserCommand cmd;
+  if (!is_engine_ready(engine) || origin == NULL || out == NULL) {
+    return false;
+  }
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_GENERATE;
+  (void)strncpy(cmd.origin, origin, sizeof(cmd.origin) - 1u);
+  if (username != NULL) {
+    (void)strncpy(cmd.username, username, sizeof(cmd.username) - 1u);
+  }
+  cmd.nonce = 0u;
+  if (!action_engine_handle_command(engine, &cmd, out)) {
+    return false;
+  }
+  if (!out->allowed) {
+    return true;
+  }
+  return action_engine_confirm_hold(engine, out);
+}
+
+bool action_engine_device_select_next(action_engine_t *engine, ActionResult *out) {
+  BrowserCommand cmd;
+  if (!is_engine_ready(engine) || out == NULL) {
+    return false;
+  }
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.type = BROWSER_CMD_REQUEST_SELECT_NEXT;
+  cmd.nonce = 0u;
+  if (!action_engine_handle_command(engine, &cmd, out)) {
+    return false;
+  }
+  if (!out->allowed) {
+    return true;
+  }
+  return action_engine_confirm_hold(engine, out);
+}

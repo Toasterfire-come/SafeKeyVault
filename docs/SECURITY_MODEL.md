@@ -6,19 +6,18 @@
 - Runtime settings (autolock, popup policy, lockout policy).
 
 ## Trust boundaries
-- Browser webpage JS: untrusted.
-- Browser extension privileged context: constrained but still host-side risk.
+- Host computer and OS: untrusted execution environment.
+- USB transport: untrusted channel, device enforces policy locally.
 - Device firmware: trusted root for policy enforcement.
 
 ## Current enforced controls
-- Origin-bound fill checks.
 - Touch/hold confirmation gates for sensitive actions.
 - PIN lockout with progressive delay.
 - Optional wipe state after repeated failures.
-- Command validation and bounded decoding.
-- Basic rate limiting.
+- Bounded command parsing and replay rejection (for host command frames).
+- Basic per-channel rate limiting.
+- Device-only workflow APIs allow save/fill/generate/select fully on-device.
 - Monotonic nonce replay rejection in action engine.
-- Browser extension command allowlist with privileged HID only in background service worker.
 
 ## Known gaps
 - Crypto is currently test-stubbed, not production AEAD.
@@ -28,7 +27,7 @@
 
 ## Non-negotiable security invariants
 1. Do not output credentials while locked or wiped.
-2. Never fill credentials on origin mismatch.
+2. Never perform sensitive actions without physical touch/hold confirmation.
 3. Manual popup gate must be respected when enabled.
 4. Command parser must reject malformed/oversized payloads.
 

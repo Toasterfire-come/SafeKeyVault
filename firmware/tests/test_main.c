@@ -426,6 +426,45 @@ static void test_action_engine_replay_and_pin_change(void) {
   assert(strstr(out.message, "replay blocked") != NULL);
 }
 
+static void test_device_only_flow(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out = {0};
+
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
+
+  assert(action_engine_device_save_credential(
+      &engine, "https://device-only.example", "alice", "StrongDevice9!", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(vault.count == 1u);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_device_fill_current(&engine, "https://device-only.example", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(strcmp(out.typed_username, "alice") == 0);
+  assert(strcmp(out.typed_password, "StrongDevice9!") == 0);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_device_generate_for_origin(
+      &engine, "https://new-device.example", "new-user", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(out.generated_password || strlen(out.generated_value) >= PASSWORD_MIN_LENGTH);
+  assert(vault.count == 2u);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_device_select_next(&engine, &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(out.selected_next);
+}
+
 static void test_secure_wipe_for_vault(void) {
   vault_t vault;
   credential_t c = {0};
@@ -456,6 +495,7 @@ int main(void) {
   test_security_utils_and_rate_limiter();
   test_command_codec_and_settings_store();
   test_action_engine_replay_and_pin_change();
+  test_device_only_flow();
   test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");
