@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "browser_protocol.h"
+#include "crypto_stub.h"
 #include "password_store.h"
 #include "security_utils.h"
 

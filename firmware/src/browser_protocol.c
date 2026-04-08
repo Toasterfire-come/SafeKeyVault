@@ -4,6 +4,17 @@
 #include <stdio.h>
 #include <string.h>
 
+static size_t bounded_strlen(const char *s, size_t max_len) {
+  size_t i = 0u;
+  if (s == NULL) {
+    return 0u;
+  }
+  while (i < max_len && s[i] != '\0') {
+    i++;
+  }
+  return i;
+}
+
 static bool has_scheme(const char *origin) {
   return strstr(origin, "://") != NULL;
 }
@@ -66,9 +77,9 @@ bool browser_validate_command(const BrowserCommand *cmd, BrowserCommandResult *r
   }
 
   /* Reject oversized field payloads early to reduce parser abuse surface. */
-  if (strnlen(cmd->origin, sizeof(cmd->origin)) >= sizeof(cmd->origin) ||
-      strnlen(cmd->username, sizeof(cmd->username)) >= sizeof(cmd->username) ||
-      strnlen(cmd->password, sizeof(cmd->password)) >= sizeof(cmd->password)) {
+  if (bounded_strlen(cmd->origin, sizeof(cmd->origin)) >= sizeof(cmd->origin) ||
+      bounded_strlen(cmd->username, sizeof(cmd->username)) >= sizeof(cmd->username) ||
+      bounded_strlen(cmd->password, sizeof(cmd->password)) >= sizeof(cmd->password)) {
     (void) snprintf(result->message, sizeof(result->message), "field too long");
     return false;
   }
