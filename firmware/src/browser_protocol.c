@@ -65,6 +65,14 @@ bool browser_validate_command(const BrowserCommand *cmd, BrowserCommandResult *r
     return false;
   }
 
+  /* Reject oversized field payloads early to reduce parser abuse surface. */
+  if (strnlen(cmd->origin, sizeof(cmd->origin)) >= sizeof(cmd->origin) ||
+      strnlen(cmd->username, sizeof(cmd->username)) >= sizeof(cmd->username) ||
+      strnlen(cmd->password, sizeof(cmd->password)) >= sizeof(cmd->password)) {
+    (void) snprintf(result->message, sizeof(result->message), "field too long");
+    return false;
+  }
+
   if (cmd->type != BROWSER_CMD_REQUEST_SELECT_NEXT) {
     result->high_risk_origin = browser_origin_is_suspicious(cmd->origin);
     if (result->high_risk_origin) {

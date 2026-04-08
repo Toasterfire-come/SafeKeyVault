@@ -6,6 +6,7 @@
 
 #include "browser_protocol.h"
 #include "password_store.h"
+#include "security_utils.h"
 
 #define LOCKOUT_TICKS_BASE 3u
 #define LOCKOUT_TICKS_STEP 2u
@@ -17,6 +18,8 @@ static runtime_settings_t g_settings = {
     .hold_required_for_selection = true,
     .autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT,
 };
+static uint8_t g_pin_verifier[16];
+static bool g_pin_verifier_set = false;
 
 static void reset_unlock_session(device_context_t *ctx) {
     ctx->unlocked = false;
@@ -127,13 +130,23 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         }
     }
 
-    if (pin_len == PIN_DIGITS && all_digits && strncmp(pin, "12345", PIN_DIGITS) == 0) {
-        ctx->failed_pin_attempts = 0u;
-        ctx->lockout_ticks_remaining = 0u;
-        ctx->unlocked = true;
-        ctx->state = DEVICE_UNLOCKED;
-        ctx->inactivity_seconds = 0u;
-        return true;
+    if (!g_pin_verifier_set) {
+        crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+        g_pin_verifier_set = true;
+    }
+
+    {
+        uint8_t candidate[16] = {0};
+        crypto_stub_hash16((const uint8_t *)pin, pin_len, candidate);
+        if (pin_len == PIN_DIGITS && all_digits &&
+            sec_consttime_memeq(candidate, g_pin_verifier, sizeof(candidate))) {
+            ctx->failed_pin_attempts = 0u;
+            ctx->lockout_ticks_remaining = 0u;
+            ctx->unlocked = true;
+            ctx->state = DEVICE_UNLOCKED;
+            ctx->inactivity_seconds = 0u;
+            return true;
+        }
     }
 
     ctx->failed_pin_attempts++;
@@ -152,6 +165,42 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         ctx->lockout_ticks_remaining = LOCKOUT_TICKS_BASE + (overflow * LOCKOUT_TICKS_STEP);
     }
     return false;
+}
+
+bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const char *new_pin) {
+    size_t old_len = 0u;
+    size_t new_len = 0u;
+    bool old_digits = true;
+    bool new_digits = true;
+    uint8_t old_hash[16] = {0};
+
+    if (ctx == NULL || old_pin == NULL || new_pin == NULL || !ctx->unlocked || ctx->wiped) {
+        return false;
+    }
+    for (old_len = 0u; old_pin[old_len] != '\0'; ++old_len) {
+        if (old_pin[old_len] < '0' || old_pin[old_len] > '9') {
+            old_digits = false;
+        }
+    }
+    for (new_len = 0u; new_pin[new_len] != '\0'; ++new_len) {
+        if (new_pin[new_len] < '0' || new_pin[new_len] > '9') {
+            new_digits = false;
+        }
+    }
+    if (old_len != PIN_DIGITS || new_len != PIN_DIGITS || !old_digits || !new_digits) {
+        return false;
+    }
+    if (!g_pin_verifier_set) {
+        crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+        g_pin_verifier_set = true;
+    }
+    crypto_stub_hash16((const uint8_t *)old_pin, old_len, old_hash);
+    if (!sec_consttime_memeq(old_hash, g_pin_verifier, sizeof(old_hash))) {
+        return false;
+    }
+    crypto_stub_hash16((const uint8_t *)new_pin, new_len, g_pin_verifier);
+    g_pin_verifier_set = true;
+    return true;
 }
 
 bool state_machine_request_fill(device_context_t *ctx,
@@ -247,4 +296,12 @@ void state_machine_get_settings(runtime_settings_t *out_settings) {
         return;
     }
     *out_settings = g_settings;
+}
+
+void state_machine_set_pin_verifier(const uint8_t verifier[16]) {
+    if (verifier == NULL) {
+        return;
+    }
+    memcpy(g_pin_verifier, verifier, 16u);
+    g_pin_verifier_set = true;
 }

@@ -55,6 +55,10 @@ void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_
 bool action_engine_handle_command(action_engine_t *engine,
                                   const BrowserCommand *cmd,
                                   ActionResult *out);
+bool action_engine_unlock_with_pin(action_engine_t *engine, const char *pin);
+bool action_engine_try_change_pin(action_engine_t *engine,
+                                  const char *old_pin,
+                                  const char *new_pin);
 void action_engine_arm_manual_popup(action_engine_t *engine);
 bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out);
 bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out);

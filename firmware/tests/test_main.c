@@ -330,6 +330,7 @@ static void test_command_codec_and_settings_store(void) {
   runtime_settings_t loaded = {0};
 
   cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  cmd.nonce = 42u;
   strncpy(cmd.origin, "https://codec.example", sizeof(cmd.origin) - 1);
   strncpy(cmd.username, "codec_user", sizeof(cmd.username) - 1);
   strncpy(cmd.password, "CodecPass9!", sizeof(cmd.password) - 1);
@@ -338,6 +339,7 @@ static void test_command_codec_and_settings_store(void) {
   assert(frame_len > 0u);
   assert(command_codec_decode(frame, frame_len, &decoded));
   assert(decoded.type == cmd.type);
+  assert(decoded.nonce == cmd.nonce);
   assert(strcmp(decoded.origin, cmd.origin) == 0);
   assert(strcmp(decoded.username, cmd.username) == 0);
   assert(strcmp(decoded.password, cmd.password) == 0);
@@ -359,6 +361,41 @@ static void test_command_codec_and_settings_store(void) {
   assert(loaded.hold_required_for_selection == settings.hold_required_for_selection);
   assert(loaded.autolock_seconds == settings.autolock_seconds);
   assert(settings_store_wipe());
+}
+
+static void test_action_engine_replay_and_pin_change(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out = {0};
+  BrowserCommand cmd = {0};
+
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
+  assert(action_engine_try_change_pin(&engine, "12345", "54321"));
+  assert(!action_engine_try_change_pin(&engine, "12345", "11111"));
+
+  state_machine_init(&ctx);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(!action_engine_unlock_with_pin(&engine, "12345"));
+  assert(action_engine_unlock_with_pin(&engine, "54321"));
+
+  cmd.type = BROWSER_CMD_REQUEST_GENERATE;
+  cmd.nonce = 7u;
+  strncpy(cmd.origin, "https://nonce.example", sizeof(cmd.origin) - 1u);
+  strncpy(cmd.username, "nonce-user", sizeof(cmd.username) - 1u);
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(out.allowed);
+  assert(action_engine_confirm_hold(&engine, &out));
+  assert(out.performed);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_handle_command(&engine, &cmd, &out));
+  assert(!out.allowed);
+  assert(strstr(out.message, "replay blocked") != NULL);
 }
 
 static void test_secure_wipe_for_vault(void) {
@@ -389,6 +426,7 @@ int main(void) {
   test_action_engine_ui_feedback_mapping();
   test_security_utils_and_rate_limiter();
   test_command_codec_and_settings_store();
+  test_action_engine_replay_and_pin_change();
   test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");

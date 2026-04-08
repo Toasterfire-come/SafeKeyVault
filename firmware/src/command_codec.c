@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void trim_newline(char *s) {
@@ -71,6 +72,8 @@ bool command_codec_decode_line(const char *line, BrowserCommand *out_cmd) {
         return false;
       }
       seen_type = true;
+    } else if (strcmp(key, "nonce") == 0) {
+      cmd.nonce = (uint32_t)strtoul(value, NULL, 10);
     } else if (strcmp(key, "origin") == 0) {
       (void)strncpy(cmd.origin, value, sizeof(cmd.origin) - 1u);
     } else if (strcmp(key, "username") == 0) {
@@ -127,8 +130,8 @@ bool command_codec_encode(const BrowserCommand *cmd,
     default: return false;
   }
   n = snprintf((char *)out_buf, out_len,
-               "type=%s;origin=%s;username=%s;password=%s",
-               type, cmd->origin, cmd->username, cmd->password);
+               "type=%s;nonce=%u;origin=%s;username=%s;password=%s",
+               type, (unsigned)cmd->nonce, cmd->origin, cmd->username, cmd->password);
   if (n <= 0 || (size_t)n >= out_len) {
     return false;
   }

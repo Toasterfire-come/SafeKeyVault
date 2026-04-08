@@ -17,6 +17,7 @@
     "scripting",
     "hid"
   ],
+  "web_accessible_resources": [],
   "host_permissions": [
     "https://*/*"
   ],

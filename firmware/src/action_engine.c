@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "browser_protocol.h"
+#include "command_codec.h"
 #include "crypto_stub.h"
 #include "password_generator.h"
 #include "password_store.h"
@@ -16,6 +17,9 @@
 
 static uint32_t g_action_clock = 1u;
 static rate_limiter_t g_command_limiter;
+static uint8_t g_pin_verifier[16];
+static bool g_pin_verifier_set = false;
+static uint32_t g_last_nonce = 0u;
 
 static void clear_pending(pending_request_t *pending) {
   if (pending == NULL) {
@@ -71,6 +75,12 @@ void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_
   engine->ctx = ctx;
   clear_pending(&engine->pending);
   rate_limiter_init(&g_command_limiter);
+  if (!g_pin_verifier_set) {
+    crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+    g_pin_verifier_set = true;
+  }
+  state_machine_set_pin_verifier(g_pin_verifier);
+  g_last_nonce = 0u;
 }
 
 bool action_engine_handle_command(action_engine_t *engine,
@@ -88,6 +98,14 @@ bool action_engine_handle_command(action_engine_t *engine,
     return false;
   }
   memset(out, 0, sizeof(*out));
+
+  if (cmd->nonce != 0u) {
+    if (cmd->nonce <= g_last_nonce) {
+      (void)snprintf(out->message, sizeof(out->message), "replay blocked");
+      return true;
+    }
+    g_last_nonce = cmd->nonce;
+  }
 
   if (state_machine_is_wiped(engine->ctx)) {
     (void)snprintf(out->message, sizeof(out->message), "device wiped");
@@ -252,6 +270,13 @@ bool action_engine_handle_command(action_engine_t *engine,
       (void)snprintf(out->message, sizeof(out->message), "unsupported command");
       return true;
   }
+}
+
+bool action_engine_unlock_with_pin(action_engine_t *engine, const char *pin) {
+  if (!is_engine_ready(engine) || pin == NULL) {
+    return false;
+  }
+  return state_machine_try_unlock(engine->ctx, pin);
 }
 
 void action_engine_arm_manual_popup(action_engine_t *engine) {
@@ -419,5 +444,20 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
 
   (void)snprintf(out->message, sizeof(out->message), "invalid transition");
   clear_pending(&engine->pending);
+  return true;
+}
+
+bool action_engine_try_change_pin(action_engine_t *engine,
+                                  const char *old_pin,
+                                  const char *new_pin) {
+  if (!is_engine_ready(engine)) {
+    return false;
+  }
+  if (!state_machine_set_pin(engine->ctx, old_pin, new_pin)) {
+    return false;
+  }
+  crypto_stub_hash16((const uint8_t *)new_pin, strlen(new_pin), g_pin_verifier);
+  g_pin_verifier_set = true;
+  state_machine_set_pin_verifier(g_pin_verifier);
   return true;
 }

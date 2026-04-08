@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct {
     BrowserCommandType type;
+    uint32_t nonce;
     char origin[96];
     char username[MAX_USERNAME_LEN];
     char password[MAX_PASSWORD_LEN];
