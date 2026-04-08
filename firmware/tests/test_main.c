@@ -531,6 +531,61 @@ static void test_press_without_known_context_opens_settings(void) {
   assert(strstr(out.message, "settings popup open") != NULL);
 }
 
+static void test_settings_popup_actions(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out = {0};
+  runtime_settings_t desired = {
+      .auto_popup_enabled = false,
+      .manual_popup_requires_touch = true,
+      .require_touch_for_fill = true,
+      .hold_required_for_selection = true,
+      .autolock_seconds = 12u,
+  };
+  runtime_settings_t loaded = {0};
+
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
+
+  assert(action_engine_device_save_credential(
+      &engine, "https://settings.example", "alice", "OldPass9!", &out));
+  assert(out.performed);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_button_hold(&engine, &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(strstr(out.message, "settings popup open") != NULL);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_device_apply_settings(&engine, &desired, &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(strstr(out.message, "settings updated") != NULL);
+
+  state_machine_get_settings(&loaded);
+  assert(loaded.auto_popup_enabled == desired.auto_popup_enabled);
+  assert(loaded.manual_popup_requires_touch == desired.manual_popup_requires_touch);
+  assert(loaded.require_touch_for_fill == desired.require_touch_for_fill);
+  assert(loaded.hold_required_for_selection == desired.hold_required_for_selection);
+  assert(loaded.autolock_seconds == desired.autolock_seconds);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_device_modify_password(
+      &engine, "https://settings.example", "alice", "NewPass9!", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(out.updated_existing_record);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_button_press(&engine, "https://settings.example", &out));
+  assert(out.performed);
+  assert(strcmp(out.typed_password, "NewPass9!") == 0);
+}
+
 static void test_secure_wipe_for_vault(void) {
   vault_t vault;
   credential_t c = {0};
@@ -564,6 +619,7 @@ int main(void) {
   test_device_only_flow();
   test_single_press_and_hold_model();
   test_press_without_known_context_opens_settings();
+  test_settings_popup_actions();
   test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");

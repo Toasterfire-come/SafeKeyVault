@@ -10,6 +10,7 @@ This directory contains a host-testable firmware core scaffold for the RP2040 pa
 - **Single button press** triggers password fill from the current selected credential.
   If there is no known credential for the active site/app context, press opens settings.
 - **Button hold** opens device settings/password-modify popup mode.
+  Popup actions support applying configuration and updating stored passwords.
 - PIN failure lockout behavior and inactivity auto-lock.
 - On-demand secure password generation flow for first-time site requests.
 

@@ -568,6 +568,49 @@ bool action_engine_popup_open(action_engine_t *engine, ActionResult *out) {
   return true;
 }
 
+bool action_engine_device_open_settings(action_engine_t *engine, ActionResult *out) {
+  return action_engine_popup_open(engine, out);
+}
+
+bool action_engine_device_apply_settings(action_engine_t *engine,
+                                         const runtime_settings_t *settings,
+                                         ActionResult *out) {
+  runtime_settings_t applied;
+  if (!is_engine_ready(engine) || settings == NULL || out == NULL) {
+    return false;
+  }
+  if (!engine->ctx->unlocked || engine->ctx->state == DEVICE_LOCKED_OUT ||
+      state_machine_is_wiped(engine->ctx)) {
+    memset(out, 0, sizeof(*out));
+    (void)snprintf(out->message, sizeof(out->message), "device locked");
+    return true;
+  }
+
+  applied = *settings;
+  if (applied.autolock_seconds == 0u) {
+    applied.autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT;
+  }
+  state_machine_apply_settings(&applied);
+
+  memset(out, 0, sizeof(*out));
+  out->allowed = true;
+  out->performed = true;
+  (void)snprintf(out->message, sizeof(out->message), "settings updated");
+  return true;
+}
+
+bool action_engine_device_modify_password(action_engine_t *engine,
+                                          const char *origin,
+                                          const char *username,
+                                          const char *new_password,
+                                          ActionResult *out) {
+  if (!is_engine_ready(engine) || origin == NULL || username == NULL ||
+      new_password == NULL || out == NULL) {
+    return false;
+  }
+  return action_engine_device_save_credential(engine, origin, username, new_password, out);
+}
+
 bool action_engine_button_press(action_engine_t *engine, const char *origin, ActionResult *out) {
   credential_t ignored;
   if (!is_engine_ready(engine) || out == NULL) {

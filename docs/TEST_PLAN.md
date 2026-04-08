@@ -26,7 +26,7 @@ Manual verification:
 - press once to trigger password fill for active site context
 - press once with unknown/absent site context and verify settings popup opens instead of fill
 - hold press to open settings/modify popup on-device
-- from popup, change password/settings and confirm persistence
+- from popup, change password/settings and confirm persistence and updated fill output
 
 Security checks:
 - no dependency on browser extension or host companion app
