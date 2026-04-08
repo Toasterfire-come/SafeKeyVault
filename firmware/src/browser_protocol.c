@@ -1,6 +1,5 @@
 #include "browser_protocol.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -32,6 +31,19 @@ static bool is_safe_ascii_text(const char *value, size_t max_len) {
     }
   }
   return true;
+}
+
+static bool has_url_like_value(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  if (strstr(value, "://") != NULL) {
+    return true;
+  }
+  if (strncmp(value, "www.", 4u) == 0) {
+    return true;
+  }
+  return false;
 }
 
 bool browser_origin_is_suspicious(const char *origin) {
@@ -106,7 +118,12 @@ bool browser_validate_command(const BrowserCommand *cmd, BrowserCommandResult *r
   if (!is_safe_ascii_text(cmd->origin, sizeof(cmd->origin)) ||
       !is_safe_ascii_text(cmd->username, sizeof(cmd->username)) ||
       !is_safe_ascii_text(cmd->password, sizeof(cmd->password))) {
-    (void) snprintf(result->message, sizeof(result->message), "invalid characters");
+    (void) snprintf(result->message, sizeof(result->message), "unsafe field chars");
+    return false;
+  }
+
+  if (has_url_like_value(cmd->username) || has_url_like_value(cmd->password)) {
+    (void) snprintf(result->message, sizeof(result->message), "unsafe field chars");
     return false;
   }
 

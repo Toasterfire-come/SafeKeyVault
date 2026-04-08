@@ -118,7 +118,7 @@ static void test_state_machine_touch_gate(void) {
 
   credential_record_t rec = {0};
   strncpy(rec.origin, "https://github.com", sizeof(rec.origin) - 1);
-  strncpy(rec.username, "u", sizeof(rec.username) - 1);
+  strncpy(rec.username, "user", sizeof(rec.username) - 1);
   strncpy(rec.password, "strongpass123!", sizeof(rec.password) - 1);
   rec.requires_touch = true;
 
