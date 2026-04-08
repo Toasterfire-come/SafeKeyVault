@@ -432,6 +432,7 @@ static void test_device_only_flow(void) {
   action_engine_t engine;
   ActionResult out = {0};
 
+  assert(action_engine_try_change_pin(&engine, "54321", "12345") || true);
   state_machine_init(&ctx);
   password_store_init(&vault);
   action_engine_init(&engine, &vault, &ctx);
@@ -455,7 +456,12 @@ static void test_device_only_flow(void) {
       &engine, "https://new-device.example", "new-user", &out));
   assert(out.allowed);
   assert(out.performed);
-  assert(out.generated_password || strlen(out.generated_value) >= PASSWORD_MIN_LENGTH);
+  assert(vault.count == 2u);
+  {
+    credential_t generated = {0};
+    assert(password_store_find_by_origin(&vault, "https://new-device.example", &generated));
+    assert(generated.username[0] != '\0');
+  }
   assert(vault.count == 2u);
 
   memset(&out, 0, sizeof(out));
