@@ -24,6 +24,7 @@ Manual verification:
 - plug device over USB-C and confirm standard HID keyboard enumeration
 - unlock with 5-digit PIN from on-device input path
 - press once to trigger password fill for active site context
+- press once with unknown/absent site context and verify settings popup opens instead of fill
 - hold press to open settings/modify popup on-device
 - from popup, change password/settings and confirm persistence
 

@@ -569,8 +569,13 @@ bool action_engine_popup_open(action_engine_t *engine, ActionResult *out) {
 }
 
 bool action_engine_button_press(action_engine_t *engine, const char *origin, ActionResult *out) {
-  if (!is_engine_ready(engine) || origin == NULL || out == NULL) {
+  credential_t ignored;
+  if (!is_engine_ready(engine) || out == NULL) {
     return false;
+  }
+  if (origin == NULL || origin[0] == '\0' ||
+      !password_store_find_by_origin(engine->vault, origin, &ignored)) {
+    return action_engine_popup_open(engine, out);
   }
   return action_engine_device_fill_current(engine, origin, out);
 }

@@ -507,6 +507,30 @@ static void test_single_press_and_hold_model(void) {
   assert(!settings.hold_required_for_selection);
 }
 
+static void test_press_without_known_context_opens_settings(void) {
+  device_context_t ctx;
+  vault_t vault;
+  action_engine_t engine;
+  ActionResult out = {0};
+
+  state_machine_init(&ctx);
+  password_store_init(&vault);
+  action_engine_init(&engine, &vault, &ctx);
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_button_press(&engine, "", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(strstr(out.message, "settings popup open") != NULL);
+
+  memset(&out, 0, sizeof(out));
+  assert(action_engine_button_press(&engine, "https://unknown.example", &out));
+  assert(out.allowed);
+  assert(out.performed);
+  assert(strstr(out.message, "settings popup open") != NULL);
+}
+
 static void test_secure_wipe_for_vault(void) {
   vault_t vault;
   credential_t c = {0};
@@ -539,6 +563,7 @@ int main(void) {
   test_action_engine_replay_and_pin_change();
   test_device_only_flow();
   test_single_press_and_hold_model();
+  test_press_without_known_context_opens_settings();
   test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");

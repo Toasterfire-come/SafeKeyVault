@@ -17,6 +17,7 @@
 - No credential fill on origin mismatch.
 - No sensitive action while locked/locked-out/wiped.
 - Single press triggers password fill for the active credential context.
+- If no known credential context exists for the current site/app, single press opens settings instead of filling.
 - Hold opens settings/modify mode (password/settings changes are done inside that mode).
 - PIN failures trigger lockout, then optional wipe.
 - Plug-and-play flow is device-driven; no browser extension dependency.
