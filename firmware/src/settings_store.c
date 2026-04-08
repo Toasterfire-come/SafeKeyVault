@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "crypto_stub.h"
+#include "crypto_engine.h"
 #include "security_utils.h"
 #include "security_policy.h"
 

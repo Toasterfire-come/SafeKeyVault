@@ -5,6 +5,8 @@
 - `state_machine`: lock/unlock, lockout/wipe progression, touch transitions.
 - `action_engine`: executes on-device save/fill/generate/select actions with a strict single-button model.
 - `password_store` + `vault`: credential storage helpers and wipe path.
+- `crypto_engine`: production-oriented crypto abstraction with AEAD/KDF interfaces
+  and ATECC binding points; currently backed by host-safe fallback primitives.
 - `security_policy`: password checks (min length 8, common/reuse warning paths).
 - `browser_protocol`: retained strict input validation for origin/credential record fields.
 - `command_codec`: retained strict fixed-bounds parse/serialize for host test framing.
@@ -24,6 +26,7 @@
 
 ## Known limitations
 
-- Crypto layer still uses stub implementations for host tests.
+- Crypto backend still uses fallback primitives in this stage; production AEAD/KDF
+  and full ATECC command path are not yet enabled on target hardware.
 - FIDO2/WebAuthn transport and authenticator logic not yet implemented.
 - ATECC608A-backed key paths not yet integrated.

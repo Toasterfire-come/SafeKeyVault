@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "browser_protocol.h"
-#include "crypto_stub.h"
+#include "crypto_engine.h"
 #include "password_store.h"
 #include "security_utils.h"
 
@@ -132,13 +132,13 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
     }
 
     if (!g_pin_verifier_set) {
-        crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+        crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
         g_pin_verifier_set = true;
     }
 
     {
         uint8_t candidate[16] = {0};
-        crypto_stub_hash16((const uint8_t *)pin, pin_len, candidate);
+        crypto_engine_hash16((const uint8_t *)pin, pin_len, candidate);
         if (pin_len == PIN_DIGITS && all_digits &&
             sec_consttime_memeq(candidate, g_pin_verifier, sizeof(candidate))) {
             ctx->failed_pin_attempts = 0u;
@@ -192,14 +192,14 @@ bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const cha
         return false;
     }
     if (!g_pin_verifier_set) {
-        crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+        crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
         g_pin_verifier_set = true;
     }
-    crypto_stub_hash16((const uint8_t *)old_pin, old_len, old_hash);
+    crypto_engine_hash16((const uint8_t *)old_pin, old_len, old_hash);
     if (!sec_consttime_memeq(old_hash, g_pin_verifier, sizeof(old_hash))) {
         return false;
     }
-    crypto_stub_hash16((const uint8_t *)new_pin, new_len, g_pin_verifier);
+    crypto_engine_hash16((const uint8_t *)new_pin, new_len, g_pin_verifier);
     g_pin_verifier_set = true;
     return true;
 }

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "crypto_stub.h"
+#include "crypto_engine.h"
 
 void password_store_init(vault_t *vault) {
   if (vault == NULL) {
@@ -156,15 +156,15 @@ void password_store_make_fingerprint(const char *password, uint8_t out_fp[16]) {
     }
     (void)memcpy(buffer, password, n);
   }
-  crypto_stub_hash16(buffer, sizeof(buffer), out_fp);
+  crypto_engine_hash16(buffer, sizeof(buffer), out_fp);
 }
 
 bool password_store_encrypt_password(const char *plaintext, char *out_ciphertext, size_t out_len) {
-  return crypto_stub_encrypt_password(plaintext, out_ciphertext, out_len);
+  return crypto_engine_encrypt_password(plaintext, out_ciphertext, out_len);
 }
 
 bool password_store_decrypt_password(const char *ciphertext, char *out_plaintext, size_t out_len) {
-  return crypto_stub_decrypt_password(ciphertext, out_plaintext, out_len);
+  return crypto_engine_decrypt_password(ciphertext, out_plaintext, out_len);
 }
 
 void password_store_secure_wipe(vault_t *vault) {

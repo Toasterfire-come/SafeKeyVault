@@ -13,6 +13,7 @@
 #include "security_policy.h"
 #include "settings_store.h"
 #include "state_machine.h"
+#include "crypto_engine.h"
 
 static void test_state_machine_lockout_and_wipe(void) {
   device_context_t ctx;
@@ -602,6 +603,47 @@ static void test_secure_wipe_for_vault(void) {
   assert(vault.count == 0u);
 }
 
+static void test_crypto_engine_interfaces(void) {
+  crypto_engine_status_t status;
+  uint8_t salt[8] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
+  uint8_t pin_key[32] = {0};
+  uint8_t pubkey[32] = {0};
+  uint8_t tag[16] = {0};
+  uint8_t plaintext[32] = "hello-aead";
+  uint8_t ciphertext[32] = {0};
+  uint8_t decrypted[32] = {0};
+  size_t ciphertext_len = sizeof(ciphertext);
+  size_t decrypted_len = sizeof(decrypted);
+  uint8_t fp[16] = {0};
+
+  crypto_engine_init();
+  status = crypto_engine_get_status();
+  assert(status.aead_interface_ready);
+  assert(status.kdf_interface_ready);
+  assert(!status.secure_element_bound);
+
+  assert(crypto_engine_derive_pin_key("12345", salt, sizeof(salt), pin_key));
+  assert(pin_key[0] != 0u || pin_key[1] != 0u || pin_key[2] != 0u);
+
+  assert(crypto_engine_bind_atecc_slot(2u, pubkey, sizeof(pubkey)));
+  status = crypto_engine_get_status();
+  assert(status.secure_element_bound);
+  assert(status.backend == CRYPTO_BACKEND_ATECC608A);
+
+  assert(crypto_engine_encrypt_aead(plaintext, strlen((const char *)plaintext),
+                                    (const uint8_t *)"aad", 3u,
+                                    ciphertext, &ciphertext_len, tag));
+  assert(ciphertext_len == strlen((const char *)plaintext));
+  assert(crypto_engine_decrypt_aead(ciphertext, ciphertext_len,
+                                    (const uint8_t *)"aad", 3u, tag,
+                                    decrypted, &decrypted_len));
+  assert(decrypted_len == strlen((const char *)plaintext));
+  assert(memcmp(decrypted, plaintext, decrypted_len) == 0);
+
+  crypto_engine_password_fingerprint("Password9!", fp, sizeof(fp));
+  assert(fp[0] != 0u || fp[1] != 0u);
+}
+
 int main(void) {
   test_state_machine_lockout_and_wipe();
   test_state_machine_settings_roundtrip();
@@ -621,6 +663,7 @@ int main(void) {
   test_single_press_and_hold_model();
   test_press_without_known_context_opens_settings();
   test_settings_popup_actions();
+  test_crypto_engine_interfaces();
   test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");

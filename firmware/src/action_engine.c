@@ -8,7 +8,7 @@
 
 #include "browser_protocol.h"
 #include "command_codec.h"
-#include "crypto_stub.h"
+#include "crypto_engine.h"
 #include "password_generator.h"
 #include "password_store.h"
 #include "rate_limiter.h"
@@ -40,7 +40,7 @@ static bool load_record_plaintext(const credential_t *entry, credential_record_t
   memset(out, 0, sizeof(*out));
   (void)strncpy(out->origin, entry->origin, sizeof(out->origin) - 1u);
   (void)strncpy(out->username, entry->username, sizeof(out->username) - 1u);
-  if (!crypto_stub_decrypt_password(entry->password_ciphertext, out->password, sizeof(out->password))) {
+  if (!crypto_engine_decrypt_password(entry->password_ciphertext, out->password, sizeof(out->password))) {
     return false;
   }
   out->updated_at_epoch = entry->updated_at;
@@ -56,13 +56,13 @@ static bool stash_record(const credential_record_t *record, credential_t *out_en
   out_entry->valid = true;
   (void)strncpy(out_entry->origin, record->origin, sizeof(out_entry->origin) - 1u);
   (void)strncpy(out_entry->username, record->username, sizeof(out_entry->username) - 1u);
-  if (!crypto_stub_encrypt_password(record->password, out_entry->password_ciphertext,
+  if (!crypto_engine_encrypt_password(record->password, out_entry->password_ciphertext,
                                     sizeof(out_entry->password_ciphertext))) {
     return false;
   }
   out_entry->created_at = record->updated_at_epoch;
   out_entry->updated_at = record->updated_at_epoch;
-  crypto_stub_password_fingerprint(record->password, out_entry->password_fingerprint, 16u);
+  crypto_engine_password_fingerprint(record->password, out_entry->password_fingerprint, 16u);
   return true;
 }
 
@@ -76,7 +76,7 @@ void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_
   clear_pending(&engine->pending);
   rate_limiter_init(&g_command_limiter);
   if (!g_pin_verifier_set) {
-    crypto_stub_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
+    crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
     g_pin_verifier_set = true;
   }
   state_machine_set_pin_verifier(g_pin_verifier);
@@ -295,7 +295,7 @@ static bool commit_pending_save(action_engine_t *engine, ActionResult *out, bool
   }
 
   plaintext[0] = '\0';
-  if (!crypto_stub_decrypt_password(engine->pending.credential.password_ciphertext,
+  if (!crypto_engine_decrypt_password(engine->pending.credential.password_ciphertext,
                                     plaintext, sizeof(plaintext))) {
     (void)snprintf(out->message, sizeof(out->message), "decrypt pending failed");
     return true;
@@ -456,7 +456,7 @@ bool action_engine_try_change_pin(action_engine_t *engine,
   if (!state_machine_set_pin(engine->ctx, old_pin, new_pin)) {
     return false;
   }
-  crypto_stub_hash16((const uint8_t *)new_pin, strlen(new_pin), g_pin_verifier);
+  crypto_engine_hash16((const uint8_t *)new_pin, strlen(new_pin), g_pin_verifier);
   g_pin_verifier_set = true;
   state_machine_set_pin_verifier(g_pin_verifier);
   return true;

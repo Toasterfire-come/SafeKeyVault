@@ -20,9 +20,10 @@
 - Monotonic nonce replay rejection in action engine.
 
 ## Known gaps
-- Crypto is currently test-stubbed, not production AEAD.
+- New `crypto_engine` abstraction is in place, but still backed by fallback software primitives for host tests.
+- AEAD/KDF primitives are scaffolded and interface-stable, but not yet replaced with production cryptography.
+- ATECC608A binding points exist (slot/public-key registration + backend status), but no live chip transport path yet.
 - No secure boot / signed update flow yet.
-- No production ATECC608A integration yet.
 - No authenticated HID session/channel binding yet (nonce protects replay, not full MITM).
 
 ## Non-negotiable security invariants
