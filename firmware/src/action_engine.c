@@ -10,10 +10,12 @@
 #include "crypto_stub.h"
 #include "password_generator.h"
 #include "password_store.h"
+#include "rate_limiter.h"
 #include "security_policy.h"
 #include "state_machine.h"
 
 static uint32_t g_action_clock = 1u;
+static rate_limiter_t g_command_limiter;
 
 static void clear_pending(pending_request_t *pending) {
   if (pending == NULL) {
@@ -68,6 +70,7 @@ void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_
   engine->vault = vault;
   engine->ctx = ctx;
   clear_pending(&engine->pending);
+  rate_limiter_init(&g_command_limiter);
 }
 
 bool action_engine_handle_command(action_engine_t *engine,
@@ -89,6 +92,19 @@ bool action_engine_handle_command(action_engine_t *engine,
   if (state_machine_is_wiped(engine->ctx)) {
     (void)snprintf(out->message, sizeof(out->message), "device wiped");
     return true;
+  }
+  {
+    uint32_t retry_after = 0u;
+    if (!rate_limiter_allow(&g_command_limiter,
+                            cmd->origin[0] ? cmd->origin : "global",
+                            g_action_clock++,
+                            COMMAND_RATE_WINDOW_SECONDS_DEFAULT,
+                            MAX_COMMANDS_PER_WINDOW_DEFAULT,
+                            &retry_after)) {
+      (void)snprintf(out->message, sizeof(out->message),
+                     "rate limited (%u ticks)", retry_after);
+      return true;
+    }
   }
   if (!engine->ctx->unlocked || engine->ctx->state == DEVICE_LOCKED_OUT) {
     unsigned int wait_ticks = state_machine_lockout_remaining(engine->ctx);

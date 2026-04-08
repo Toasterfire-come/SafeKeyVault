@@ -5,9 +5,13 @@
 #include "browser_protocol.h"
 #include "action_engine.h"
 #include "ui_feedback.h"
+#include "command_codec.h"
 #include "password_generator.h"
 #include "password_store.h"
+#include "rate_limiter.h"
+#include "security_utils.h"
 #include "security_policy.h"
+#include "settings_store.h"
 #include "state_machine.h"
 
 static void test_state_machine_lockout_and_wipe(void) {
@@ -285,6 +289,93 @@ static void test_action_engine_ui_feedback_mapping(void) {
   assert(status.led == UI_LED_LOCKED_OUT);
 }
 
+static void test_security_utils_and_rate_limiter(void) {
+  uint8_t a[16] = {0};
+  uint8_t b[16] = {0};
+  rate_limiter_t limiter;
+  uint32_t retry = 0u;
+  const char *origin = "https://ratelimit.example";
+
+  assert(sec_consttime_memeq(a, b, sizeof(a)));
+  b[3] = 1u;
+  assert(!sec_consttime_memeq(a, b, sizeof(a)));
+
+  rate_limiter_init(&limiter);
+  assert(rate_limiter_allow(&limiter, origin, 0u, 4u, 3u, &retry));
+  assert(rate_limiter_allow(&limiter, origin, 1u, 4u, 3u, &retry));
+  assert(rate_limiter_allow(&limiter, origin, 2u, 4u, 3u, &retry));
+  assert(!rate_limiter_allow(&limiter, origin, 2u, 4u, 3u, &retry));
+  assert(retry > 0u);
+  for (unsigned i = 0; i < 5u; ++i) {
+    rate_limiter_tick(&limiter);
+  }
+  assert(rate_limiter_allow(&limiter, origin, 8u, 4u, 3u, &retry));
+}
+
+static void test_command_codec_and_settings_store(void) {
+  BrowserCommand cmd = {0};
+  BrowserCommand decoded = {0};
+  command_result_t result = {0};
+  char encoded_result[256] = {0};
+  uint8_t frame[COMMAND_CODEC_MAX_FRAME] = {0};
+  size_t frame_len = 0u;
+
+  runtime_settings_t settings = {
+      .auto_popup_enabled = true,
+      .manual_popup_requires_touch = true,
+      .require_touch_for_fill = true,
+      .hold_required_for_selection = true,
+      .autolock_seconds = 45u,
+  };
+  runtime_settings_t loaded = {0};
+
+  cmd.type = BROWSER_CMD_REQUEST_SAVE;
+  strncpy(cmd.origin, "https://codec.example", sizeof(cmd.origin) - 1);
+  strncpy(cmd.username, "codec_user", sizeof(cmd.username) - 1);
+  strncpy(cmd.password, "CodecPass9!", sizeof(cmd.password) - 1);
+
+  assert(command_codec_encode(&cmd, frame, sizeof(frame), &frame_len));
+  assert(frame_len > 0u);
+  assert(command_codec_decode(frame, frame_len, &decoded));
+  assert(decoded.type == cmd.type);
+  assert(strcmp(decoded.origin, cmd.origin) == 0);
+  assert(strcmp(decoded.username, cmd.username) == 0);
+  assert(strcmp(decoded.password, cmd.password) == 0);
+
+  result.allowed = true;
+  result.touch_required = true;
+  result.performed = false;
+  strncpy(result.message, "touch to continue", sizeof(result.message) - 1);
+  assert(command_codec_encode_result(&result, encoded_result, sizeof(encoded_result)));
+  assert(strstr(encoded_result, "allowed=1") != NULL);
+  assert(strstr(encoded_result, "touch_required=1") != NULL);
+
+  settings_store_init();
+  assert(settings_store_save(&settings));
+  assert(settings_store_load(&loaded));
+  assert(loaded.auto_popup_enabled == settings.auto_popup_enabled);
+  assert(loaded.manual_popup_requires_touch == settings.manual_popup_requires_touch);
+  assert(loaded.require_touch_for_fill == settings.require_touch_for_fill);
+  assert(loaded.hold_required_for_selection == settings.hold_required_for_selection);
+  assert(loaded.autolock_seconds == settings.autolock_seconds);
+  assert(settings_store_wipe());
+}
+
+static void test_secure_wipe_for_vault(void) {
+  vault_t vault;
+  credential_t c = {0};
+  password_store_init(&vault);
+  c.valid = true;
+  c.id = 9u;
+  strncpy(c.origin, "https://wipe.example", sizeof(c.origin) - 1);
+  strncpy(c.username, "wipe-user", sizeof(c.username) - 1);
+  strncpy(c.password_ciphertext, "cipher", sizeof(c.password_ciphertext) - 1);
+  assert(password_store_upsert(&vault, &c));
+  assert(vault.count == 1u);
+  password_store_secure_wipe(&vault);
+  assert(vault.count == 0u);
+}
+
 int main(void) {
   test_state_machine_lockout_and_wipe();
   test_state_machine_settings_roundtrip();
@@ -296,6 +387,9 @@ int main(void) {
   test_action_engine_fill_save_generate_select();
   test_action_engine_auto_popup_modes();
   test_action_engine_ui_feedback_mapping();
+  test_security_utils_and_rate_limiter();
+  test_command_codec_and_settings_store();
+  test_secure_wipe_for_vault();
 
   puts("firmware tests: OK");
   return 0;

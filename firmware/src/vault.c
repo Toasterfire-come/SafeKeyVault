@@ -166,3 +166,10 @@ bool password_store_encrypt_password(const char *plaintext, char *out_ciphertext
 bool password_store_decrypt_password(const char *ciphertext, char *out_plaintext, size_t out_len) {
   return crypto_stub_decrypt_password(ciphertext, out_plaintext, out_len);
 }
+
+void password_store_secure_wipe(vault_t *vault) {
+  if (vault == NULL) {
+    return;
+  }
+  memset(vault, 0, sizeof(*vault));
+}

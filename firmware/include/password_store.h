@@ -37,5 +37,6 @@ uint32_t password_store_next_id(const vault_t *vault);
 void password_store_make_fingerprint(const char *password, uint8_t out_fp[16]);
 bool password_store_encrypt_password(const char *plaintext, char *out_ciphertext, size_t out_len);
 bool password_store_decrypt_password(const char *ciphertext, char *out_plaintext, size_t out_len);
+void password_store_secure_wipe(vault_t *vault);
 
 #endif // PASSWORD_STORE_H
