@@ -7,8 +7,13 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 add_library(firmware_core
   src/action_engine.c
+  src/storage_backend.c
   src/command_codec.c
   src/crypto_engine.c
+  src/secure_boot.c
+  src/usb_session.c
+  src/fido2_authenticator.c
+  src/platform_hal.c
   src/rate_limiter.c
   src/security_utils.c
   src/settings_store.c

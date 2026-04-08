@@ -8,12 +8,14 @@
 #include "crypto_engine.h"
 #include "security_utils.h"
 #include "security_policy.h"
+#include "storage_backend.h"
 
 typedef struct {
   bool initialized;
   settings_blob_t blob;
   uint8_t encrypted_payload[128];
   size_t encrypted_payload_len;
+  uint32_t generation;
 } settings_store_state_t;
 
 static settings_store_state_t g_settings_store;
@@ -54,6 +56,8 @@ static void settings_store_nonce(const settings_blob_t *blob, uint8_t out_nonce[
 
 void settings_store_init(void) {
   memset(&g_settings_store, 0, sizeof(g_settings_store));
+  storage_backend_init();
+  storage_backend_reset();
   crypto_engine_init();
   {
     const uint8_t default_key[] = {
@@ -72,6 +76,9 @@ bool settings_store_save(const runtime_settings_t *settings) {
   uint8_t tag[16];
   size_t ciphertext_len = sizeof(g_settings_store.encrypted_payload);
 
+  uint8_t record[4u + 4u + sizeof(settings_blob_t) + sizeof(g_settings_store.encrypted_payload)];
+  size_t record_len = 0u;
+  storage_record_t rec;
   if (!g_settings_store.initialized || settings == NULL) {
     return false;
   }
@@ -94,6 +101,25 @@ bool settings_store_save(const runtime_settings_t *settings) {
   g_settings_store.encrypted_payload_len = ciphertext_len;
   memcpy(blob.hmac_tag, tag, sizeof(blob.hmac_tag));
   g_settings_store.blob = blob;
+  g_settings_store.generation++;
+
+  memset(record, 0, sizeof(record));
+  memcpy(record, &g_settings_store.generation, sizeof(g_settings_store.generation));
+  memcpy(record + 4u, &g_settings_store.encrypted_payload_len, sizeof(uint32_t));
+  memcpy(record + 8u, &g_settings_store.blob, sizeof(settings_blob_t));
+  memcpy(record + 8u + sizeof(settings_blob_t), g_settings_store.encrypted_payload, g_settings_store.encrypted_payload_len);
+  record_len = 8u + sizeof(settings_blob_t) + g_settings_store.encrypted_payload_len;
+  rec.generation = g_settings_store.generation;
+  rec.data = record;
+  rec.len = record_len;
+  if (!storage_backend_write(&rec)) {
+    security_secure_zero(record, sizeof(record));
+    security_secure_zero(plaintext, sizeof(plaintext));
+    security_secure_zero(tag, sizeof(tag));
+    security_secure_zero(nonce, sizeof(nonce));
+    return false;
+  }
+  security_secure_zero(record, sizeof(record));
   security_secure_zero(plaintext, sizeof(plaintext));
   security_secure_zero(tag, sizeof(tag));
   security_secure_zero(nonce, sizeof(nonce));
@@ -111,7 +137,27 @@ bool settings_store_load(runtime_settings_t *settings) {
     return false;
   }
   if (g_settings_store.encrypted_payload_len == 0u) {
-    return false;
+    storage_record_t rec;
+    uint32_t stored_payload_len = 0u;
+    if (!storage_backend_read_latest(&rec)) {
+      return false;
+    }
+    if (rec.len < (8u + sizeof(settings_blob_t))) {
+      return false;
+    }
+    memcpy(&g_settings_store.generation, rec.data, sizeof(g_settings_store.generation));
+    memcpy(&stored_payload_len, rec.data + 4u, sizeof(stored_payload_len));
+    if (stored_payload_len == 0u || stored_payload_len > sizeof(g_settings_store.encrypted_payload)) {
+      return false;
+    }
+    if (rec.len != (8u + sizeof(settings_blob_t) + stored_payload_len)) {
+      return false;
+    }
+    memcpy(&g_settings_store.blob, rec.data + 8u, sizeof(settings_blob_t));
+    memcpy(g_settings_store.encrypted_payload,
+           rec.data + 8u + sizeof(settings_blob_t),
+           stored_payload_len);
+    g_settings_store.encrypted_payload_len = stored_payload_len;
   }
   blob = g_settings_store.blob;
 
@@ -156,6 +202,7 @@ bool settings_store_wipe(void) {
   }
   security_secure_zero(&g_settings_store, sizeof(g_settings_store));
   g_settings_store.initialized = true;
+  storage_backend_reset();
   return true;
 }
 
