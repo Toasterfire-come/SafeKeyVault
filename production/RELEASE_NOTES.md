@@ -1,6 +1,6 @@
 # Production Readiness Release Notes
 
-This folder defines the production release flow for the RP2040 secure password key
+This folder defines the production release flow for the STM32U5 secure password key
 firmware.
 
 ## What is included
@@ -27,5 +27,5 @@ These tasks still require target hardware/platform integration:
 
 - Replace fallback crypto primitives with real production cryptography backend.
 - Bind runtime key operations to live ATECC608A transport and provisioning flow.
-- Integrate real RP2040 flash backend, TinyUSB HID, touch, LED, and timing drivers.
+- Integrate real STM32U5 flash backend, USB HID, touch, LED, and timing drivers.
 - Complete CTAP2/WebAuthn wire-level implementation and conformance testing.

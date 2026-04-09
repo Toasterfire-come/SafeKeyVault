@@ -1,0 +1,6 @@
+ERC RESULT: PASS
+Errors: 0
+Warnings: 1
+
+Warnings:
+- [stm32u5_qspi_flash_required] STM32U5 QSPI flash path incomplete: add W25Q128 with CS/CLK/DI/DO/WP/HOLD to QSPI_CSN/QSPI_SCLK/QSPI_SD0/QSPI_SD1/QSPI_SD2/QSPI_SD3

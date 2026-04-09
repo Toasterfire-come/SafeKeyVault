@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate RP2040_Custom_Board.svj and ERC report from board_spec.json."""
+"""Generate STM32U5_Custom_Board.svj and ERC report from board_spec.json."""
 
 from __future__ import annotations
 
@@ -11,39 +11,33 @@ from typing import Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_PATH = ROOT / "board_spec.json"
-SVJ_PATH = ROOT / "RP2040_Custom_Board.svj"
-ERC_JSON_PATH = ROOT / "RP2040_Custom_Board_erc.json"
-ERC_TXT_PATH = ROOT / "RP2040_Custom_Board_erc.txt"
+SVJ_PATH = ROOT / "STM32U5_Custom_Board.svj"
+ERC_JSON_PATH = ROOT / "STM32U5_Custom_Board_erc.json"
+ERC_TXT_PATH = ROOT / "STM32U5_Custom_Board_erc.txt"
 
 
-# RP2040 QFN-56 mapping from RP2040 datasheet section 5.5.2 (Table 615-621).
-RP2040_PIN_NUMBERS: Dict[str, int] = {
-    "3V3_1": 1,     # IOVDD
-    "3V3_2": 10,    # IOVDD
-    "3V3_3": 22,    # IOVDD
-    "GND_1": 57,    # exposed pad
-    "GND_2": 57,    # exposed pad (single ground pad exposed as both logical pins)
-    "USB_DP": 47,
-    "USB_DM": 46,
-    "XIN": 20,
-    "XOUT": 21,
-    "GP0": 2,
-    "GP1": 3,
-    "GP4": 6,
-    "GP5": 7,
-    "GP15": 18,
-    "GP16": 27,
-    "GP17": 28,
-    "GP18": 29,
-    "GP19": 30,
-    "BOOTSEL": 56,  # QSPI_CSn
-    "QSPI_SCLK": 52,
-    "QSPI_SD0": 53,
-    "QSPI_SD1": 55,
-    "QSPI_SD2": 54,
-    "QSPI_SD3": 51,
-    "SWDIO": 25,    # SWD
-    "SWCLK": 24,
+# STM32U5 generic LQFP-64 style mapping placeholder used by board scaffold.
+STM32U5_PIN_NUMBERS: Dict[str, int] = {
+    "3V3_1": 1,
+    "3V3_2": 19,
+    "3V3_3": 32,
+    "GND_1": 18,
+    "GND_2": 31,
+    "USB_DP": 45,
+    "USB_DM": 44,
+    "XIN": 8,
+    "XOUT": 9,
+    "PA0": 10,
+    "PA1": 11,
+    "PB8": 61,
+    "PB9": 62,
+    "PB5": 57,
+    "PA6": 22,
+    "PA7": 23,
+    "PA5": 21,
+    "PA4": 20,
+    "SWDIO": 46,
+    "SWCLK": 49,
 }
 
 
@@ -52,7 +46,7 @@ FOOTPRINTS: Dict[str, str] = {
     "Resistor": "Resistor_SMD:R_0603_1608Metric",
     "AMS1117-3.3": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
     "Capacitor": "Capacitor_SMD:C_0603_1608Metric",
-    "RP2040": "Package_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm",
+    "STM32U5": "Package_QFP:LQFP-64_10x10mm_P0.5mm",
     "W25Q128": "Package_SO:SOIC-8_5.23x5.23mm_P1.27mm",
     "ATECC608A": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
     "Crystal": "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
@@ -97,8 +91,8 @@ def build_components(spec: dict) -> List[dict]:
                 "number": pin_name,
                 "net": net_name,
             }
-            if comp["type"] == "RP2040":
-                pin_entry["number"] = RP2040_PIN_NUMBERS.get(pin_name, "UNKNOWN")
+            if comp["type"] == "STM32U5":
+                pin_entry["number"] = STM32U5_PIN_NUMBERS.get(pin_name, "UNKNOWN")
             pins.append(pin_entry)
         components.append(
             {
@@ -187,7 +181,7 @@ def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[Erc
                 )
             )
 
-    # Rule: USB data lines should include series resistors near RP2040.
+    # Rule: USB data lines should include series resistors near STM32U5.
     dp_series_ok = frozenset({"USB_DP", "USB_DP_CONN"}) in resistor_pairs
     dm_series_ok = frozenset({"USB_DM", "USB_DM_CONN"}) in resistor_pairs
     if (
@@ -200,25 +194,25 @@ def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[Erc
                 severity="warning",
                 rule="usb_series_resistors_recommended",
                 message=(
-                    "Add 27R series resistors between USB connector D+/D- and RP2040 "
+                    "Add 27R series resistors between USB connector D+/D- and STM32U5 "
                     "USB_DP/USB_DM (expected nets USB_DP_CONN/USB_DM_CONN)"
                 ),
             )
         )
 
-    # Rule: RP2040 boot flash QSPI path should be complete.
-    rp2040 = next((c for c in spec["components"] if c["type"] == "RP2040"), None)
+    # Rule: external QSPI flash path should be complete for STM32U5.
+    stm32u5 = next((c for c in spec["components"] if c["type"] == "STM32U5"), None)
     qspi_ok = False
-    if rp2040:
-        rp_pins = rp2040["pins"]
-        required_rp = {"BOOTSEL", "QSPI_SCLK", "QSPI_SD0", "QSPI_SD1", "QSPI_SD2", "QSPI_SD3"}
-        if required_rp.issubset(set(rp_pins.keys())):
-            mcu_csn = rp_pins["BOOTSEL"]
-            mcu_sclk = rp_pins["QSPI_SCLK"]
-            mcu_sd0 = rp_pins["QSPI_SD0"]
-            mcu_sd1 = rp_pins["QSPI_SD1"]
-            mcu_sd2 = rp_pins["QSPI_SD2"]
-            mcu_sd3 = rp_pins["QSPI_SD3"]
+    if stm32u5:
+        mcu_pins = stm32u5["pins"]
+        required_qspi = {"QSPI_CSN", "QSPI_SCLK", "QSPI_SD0", "QSPI_SD1", "QSPI_SD2", "QSPI_SD3"}
+        if required_qspi.issubset(set(mcu_pins.keys())):
+            mcu_csn = mcu_pins["QSPI_CSN"]
+            mcu_sclk = mcu_pins["QSPI_SCLK"]
+            mcu_sd0 = mcu_pins["QSPI_SD0"]
+            mcu_sd1 = mcu_pins["QSPI_SD1"]
+            mcu_sd2 = mcu_pins["QSPI_SD2"]
+            mcu_sd3 = mcu_pins["QSPI_SD3"]
 
             flashes = [c for c in spec["components"] if c["type"] == "W25Q128"]
             for flash in flashes:
@@ -226,10 +220,7 @@ def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[Erc
                 required_fp = {"CS", "CLK", "DI", "DO", "WP", "HOLD"}
                 if not required_fp.issubset(set(fp.keys())):
                     continue
-                cs_ok = (
-                    fp["CS"] == mcu_csn
-                    or frozenset({fp["CS"], mcu_csn}) in resistor_pairs
-                )
+                cs_ok = fp["CS"] == mcu_csn
                 if (
                     cs_ok
                     and fp["CLK"] == mcu_sclk
@@ -245,11 +236,11 @@ def run_erc(spec: dict, net_index: Dict[str, List[dict]]) -> Tuple[str, List[Erc
         issues.append(
             ErcIssue(
                 severity="warning",
-                rule="rp2040_boot_flash_required",
+                rule="stm32u5_qspi_flash_required",
                 message=(
-                    "RP2040 boot flash path incomplete: add W25Q128 with CS/CLK/DI/DO/WP/HOLD "
-                    "to BOOTSEL/QSPI_SCLK/QSPI_SD0/QSPI_SD1/QSPI_SD2/QSPI_SD3 "
-                    "(CS may be connected through a series resistor for BOOTSEL switching)"
+                    "STM32U5 QSPI flash path incomplete: add W25Q128 with "
+                    "CS/CLK/DI/DO/WP/HOLD to QSPI_CSN/QSPI_SCLK/QSPI_SD0/"
+                    "QSPI_SD1/QSPI_SD2/QSPI_SD3"
                 ),
             )
         )
@@ -273,9 +264,9 @@ def main() -> None:
         "metadata": {
             "notes": [
                 "Full connectivity generated from logical net assignments.",
-                "RP2040 pin numbers are exact QFN-56 package pins from RP2040 datasheet table 615-621.",
+                "STM32U5 pin numbers are mapped for an LQFP-64 package scaffold.",
                 "Footprints are assigned as KiCad-compatible library identifiers.",
-                "ERC verifies USB series resistors and complete RP2040 QSPI boot flash wiring.",
+                "ERC verifies USB series resistors and complete STM32U5 QSPI flash wiring.",
             ]
         },
     }

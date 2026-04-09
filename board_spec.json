@@ -1,5 +1,5 @@
 {
-  "project": "RP2040_Custom_Board",
+  "project": "STM32U5_Custom_Board",
   "nets": [
     {
       "name": "VBUS"
@@ -128,34 +128,35 @@
     },
     {
       "ref": "U2",
-      "type": "RP2040",
+      "type": "STM32U5",
       "pins": {
-        "3V3_1": "3V3",
-        "3V3_2": "3V3",
-        "3V3_3": "3V3",
+        "VDD_1": "3V3",
+        "VDD_2": "3V3",
+        "VDD_3": "3V3",
         "GND_1": "GND",
         "GND_2": "GND",
+        "GND_3": "GND",
         "USB_DP": "USB_DP",
         "USB_DM": "USB_DM",
         "XIN": "XIN",
         "XOUT": "XOUT",
-        "GP0": "LED1_CTRL",
-        "GP1": "LED2_CTRL",
-        "GP4": "I2C_SDA",
-        "GP5": "I2C_SCL",
-        "GP15": "TOUCH_OUT",
-        "GP16": "SPI_MISO",
-        "GP17": "SPI_CS",
-        "GP18": "SPI_CLK",
-        "GP19": "SPI_MOSI",
-        "BOOTSEL": "QSPI_CSN_MCU",
+        "PA0": "LED1_CTRL",
+        "PA1": "LED2_CTRL",
+        "PB7": "I2C_SDA",
+        "PB6": "I2C_SCL",
+        "PC13": "TOUCH_OUT",
+        "PA6": "SPI_MISO",
+        "PA4": "SPI_CS",
+        "PA5": "SPI_CLK",
+        "PA7": "SPI_MOSI",
+        "PB2": "QSPI_CSN_MCU",
         "SWDIO": "SWDIO",
         "SWCLK": "SWCLK",
-        "QSPI_SCLK": "QSPI_SCLK",
-        "QSPI_SD0": "QSPI_SD0",
-        "QSPI_SD1": "QSPI_SD1",
-        "QSPI_SD2": "QSPI_SD2",
-        "QSPI_SD3": "QSPI_SD3"
+        "PF10": "QSPI_SCLK",
+        "PF8": "QSPI_SD0",
+        "PF9": "QSPI_SD1",
+        "PF7": "QSPI_SD2",
+        "PF6": "QSPI_SD3"
       }
     },
     {
