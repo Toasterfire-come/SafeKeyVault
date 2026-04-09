@@ -1,0 +1,36 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 13,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "prod",
+      "displayName": "Firmware production",
+      "description": "Production hardened firmware build",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/firmware/build-prod",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FIRMWARE_PRODUCTION": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "prod",
+      "configurePreset": "prod"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "prod",
+      "configurePreset": "prod",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,1944 @@
+{
+  "project": "RP2040_Custom_Board",
+  "format": "svj-1.0",
+  "source": "board_spec.json",
+  "components": [
+    {
+      "ref": "J1",
+      "type": "USB_C",
+      "value": "",
+      "footprint": "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
+      "pins": [
+        {
+          "name": "VBUS",
+          "number": "VBUS",
+          "net": "VBUS"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "CC1",
+          "number": "CC1",
+          "net": "CC1_NET"
+        },
+        {
+          "name": "CC2",
+          "number": "CC2",
+          "net": "CC2_NET"
+        },
+        {
+          "name": "D+",
+          "number": "D+",
+          "net": "USB_DP_CONN"
+        },
+        {
+          "name": "D-",
+          "number": "D-",
+          "net": "USB_DM_CONN"
+        }
+      ]
+    },
+    {
+      "ref": "R1",
+      "type": "Resistor",
+      "value": "5.1k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "CC1_NET"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R2",
+      "type": "Resistor",
+      "value": "5.1k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "CC2_NET"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R8",
+      "type": "Resistor",
+      "value": "27",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "USB_DP_CONN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "USB_DP"
+        }
+      ]
+    },
+    {
+      "ref": "R9",
+      "type": "Resistor",
+      "value": "27",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "USB_DM_CONN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "USB_DM"
+        }
+      ]
+    },
+    {
+      "ref": "U1",
+      "type": "AMS1117-3.3",
+      "value": "",
+      "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+      "pins": [
+        {
+          "name": "VIN",
+          "number": "VIN",
+          "net": "VBUS"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "VOUT",
+          "number": "VOUT",
+          "net": "3V3"
+        }
+      ]
+    },
+    {
+      "ref": "C1",
+      "type": "Capacitor",
+      "value": "10uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "VBUS"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C2",
+      "type": "Capacitor",
+      "value": "10uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "U2",
+      "type": "RP2040",
+      "value": "",
+      "footprint": "Package_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm",
+      "pins": [
+        {
+          "name": "3V3_1",
+          "number": 1,
+          "net": "3V3"
+        },
+        {
+          "name": "3V3_2",
+          "number": 10,
+          "net": "3V3"
+        },
+        {
+          "name": "3V3_3",
+          "number": 22,
+          "net": "3V3"
+        },
+        {
+          "name": "GND_1",
+          "number": 57,
+          "net": "GND"
+        },
+        {
+          "name": "GND_2",
+          "number": 57,
+          "net": "GND"
+        },
+        {
+          "name": "USB_DP",
+          "number": 47,
+          "net": "USB_DP"
+        },
+        {
+          "name": "USB_DM",
+          "number": 46,
+          "net": "USB_DM"
+        },
+        {
+          "name": "XIN",
+          "number": 20,
+          "net": "XIN"
+        },
+        {
+          "name": "XOUT",
+          "number": 21,
+          "net": "XOUT"
+        },
+        {
+          "name": "GP0",
+          "number": 2,
+          "net": "LED1_CTRL"
+        },
+        {
+          "name": "GP1",
+          "number": 3,
+          "net": "LED2_CTRL"
+        },
+        {
+          "name": "GP4",
+          "number": 6,
+          "net": "I2C_SDA"
+        },
+        {
+          "name": "GP5",
+          "number": 7,
+          "net": "I2C_SCL"
+        },
+        {
+          "name": "GP15",
+          "number": 18,
+          "net": "TOUCH_OUT"
+        },
+        {
+          "name": "GP16",
+          "number": 27,
+          "net": "SPI_MISO"
+        },
+        {
+          "name": "GP17",
+          "number": 28,
+          "net": "SPI_CS"
+        },
+        {
+          "name": "GP18",
+          "number": 29,
+          "net": "SPI_CLK"
+        },
+        {
+          "name": "GP19",
+          "number": 30,
+          "net": "SPI_MOSI"
+        },
+        {
+          "name": "BOOTSEL",
+          "number": 56,
+          "net": "QSPI_CSN_MCU"
+        },
+        {
+          "name": "SWDIO",
+          "number": 25,
+          "net": "SWDIO"
+        },
+        {
+          "name": "SWCLK",
+          "number": 24,
+          "net": "SWCLK"
+        },
+        {
+          "name": "QSPI_SCLK",
+          "number": 52,
+          "net": "QSPI_SCLK"
+        },
+        {
+          "name": "QSPI_SD0",
+          "number": 53,
+          "net": "QSPI_SD0"
+        },
+        {
+          "name": "QSPI_SD1",
+          "number": 55,
+          "net": "QSPI_SD1"
+        },
+        {
+          "name": "QSPI_SD2",
+          "number": 54,
+          "net": "QSPI_SD2"
+        },
+        {
+          "name": "QSPI_SD3",
+          "number": 51,
+          "net": "QSPI_SD3"
+        }
+      ]
+    },
+    {
+      "ref": "C3",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C4",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C5",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C6",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "U3",
+      "type": "W25Q128",
+      "value": "",
+      "footprint": "Package_SO:SOIC-8_5.23x5.23mm_P1.27mm",
+      "pins": [
+        {
+          "name": "VCC",
+          "number": "VCC",
+          "net": "3V3"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "CS",
+          "number": "CS",
+          "net": "SPI_CS"
+        },
+        {
+          "name": "CLK",
+          "number": "CLK",
+          "net": "SPI_CLK"
+        },
+        {
+          "name": "DI",
+          "number": "DI",
+          "net": "SPI_MOSI"
+        },
+        {
+          "name": "DO",
+          "number": "DO",
+          "net": "SPI_MISO"
+        }
+      ]
+    },
+    {
+      "ref": "U6",
+      "type": "W25Q128",
+      "value": "",
+      "footprint": "Package_SO:SOIC-8_5.23x5.23mm_P1.27mm",
+      "pins": [
+        {
+          "name": "VCC",
+          "number": "VCC",
+          "net": "3V3"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "CS",
+          "number": "CS",
+          "net": "QSPI_CSN_FLASH"
+        },
+        {
+          "name": "CLK",
+          "number": "CLK",
+          "net": "QSPI_SCLK"
+        },
+        {
+          "name": "DI",
+          "number": "DI",
+          "net": "QSPI_SD0"
+        },
+        {
+          "name": "DO",
+          "number": "DO",
+          "net": "QSPI_SD1"
+        },
+        {
+          "name": "WP",
+          "number": "WP",
+          "net": "QSPI_SD2"
+        },
+        {
+          "name": "HOLD",
+          "number": "HOLD",
+          "net": "QSPI_SD3"
+        }
+      ]
+    },
+    {
+      "ref": "C7",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C10",
+      "type": "Capacitor",
+      "value": "0.1uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "3V3"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "U4",
+      "type": "ATECC608A",
+      "value": "",
+      "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+      "pins": [
+        {
+          "name": "VCC",
+          "number": "VCC",
+          "net": "3V3"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "SDA",
+          "number": "SDA",
+          "net": "I2C_SDA"
+        },
+        {
+          "name": "SCL",
+          "number": "SCL",
+          "net": "I2C_SCL"
+        }
+      ]
+    },
+    {
+      "ref": "R3",
+      "type": "Resistor",
+      "value": "4.7k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "I2C_SDA"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "3V3"
+        }
+      ]
+    },
+    {
+      "ref": "R4",
+      "type": "Resistor",
+      "value": "4.7k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "I2C_SCL"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "3V3"
+        }
+      ]
+    },
+    {
+      "ref": "Y1",
+      "type": "Crystal",
+      "value": "12MHz",
+      "footprint": "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "XIN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "XOUT"
+        }
+      ]
+    },
+    {
+      "ref": "C8",
+      "type": "Capacitor",
+      "value": "22pF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "XIN"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "C9",
+      "type": "Capacitor",
+      "value": "22pF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "XOUT"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "U5",
+      "type": "TTP223",
+      "value": "",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+      "pins": [
+        {
+          "name": "VDD",
+          "number": "VDD",
+          "net": "3V3"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        },
+        {
+          "name": "OUT",
+          "number": "OUT",
+          "net": "TOUCH_OUT"
+        }
+      ]
+    },
+    {
+      "ref": "R5",
+      "type": "Resistor",
+      "value": "100k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "TOUCH_OUT"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R6",
+      "type": "Resistor",
+      "value": "220",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "LED1_CTRL"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "LED1_ANODE"
+        }
+      ]
+    },
+    {
+      "ref": "D1",
+      "type": "LED",
+      "value": "",
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "pins": [
+        {
+          "name": "A",
+          "number": "A",
+          "net": "LED1_ANODE"
+        },
+        {
+          "name": "K",
+          "number": "K",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R7",
+      "type": "Resistor",
+      "value": "220",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "LED2_CTRL"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "LED2_ANODE"
+        }
+      ]
+    },
+    {
+      "ref": "D2",
+      "type": "LED",
+      "value": "",
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "pins": [
+        {
+          "name": "A",
+          "number": "A",
+          "net": "LED2_ANODE"
+        },
+        {
+          "name": "K",
+          "number": "K",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "SW1",
+      "type": "PushButton",
+      "value": "",
+      "footprint": "Button_Switch_SMD:SW_SPST_B3U-1000P",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "QSPI_CSN_FLASH"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "GND"
+        }
+      ]
+    },
+    {
+      "ref": "R10",
+      "type": "Resistor",
+      "value": "1k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": [
+        {
+          "name": "1",
+          "number": "1",
+          "net": "QSPI_CSN_MCU"
+        },
+        {
+          "name": "2",
+          "number": "2",
+          "net": "QSPI_CSN_FLASH"
+        }
+      ]
+    },
+    {
+      "ref": "J2",
+      "type": "SWD_Header",
+      "value": "",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "pins": [
+        {
+          "name": "SWDIO",
+          "number": "SWDIO",
+          "net": "SWDIO"
+        },
+        {
+          "name": "SWCLK",
+          "number": "SWCLK",
+          "net": "SWCLK"
+        },
+        {
+          "name": "GND",
+          "number": "GND",
+          "net": "GND"
+        }
+      ]
+    }
+  ],
+  "nets": [
+    {
+      "name": "3V3",
+      "label": "3V3",
+      "connections": [
+        {
+          "ref": "U1",
+          "component_type": "AMS1117-3.3",
+          "pin": "VOUT"
+        },
+        {
+          "ref": "C2",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "3V3_1"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "3V3_2"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "3V3_3"
+        },
+        {
+          "ref": "C3",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "C4",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "C5",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "C6",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "VCC"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "VCC"
+        },
+        {
+          "ref": "C7",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "C10",
+          "component_type": "Capacitor",
+          "pin": "1"
+        },
+        {
+          "ref": "U4",
+          "component_type": "ATECC608A",
+          "pin": "VCC"
+        },
+        {
+          "ref": "R3",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "R4",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "U5",
+          "component_type": "TTP223",
+          "pin": "VDD"
+        }
+      ]
+    },
+    {
+      "name": "CC1_NET",
+      "label": "CC1_NET",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "CC1"
+        },
+        {
+          "ref": "R1",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "CC2_NET",
+      "label": "CC2_NET",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "CC2"
+        },
+        {
+          "ref": "R2",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "GND",
+      "label": "GND",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "GND"
+        },
+        {
+          "ref": "R1",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "R2",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "U1",
+          "component_type": "AMS1117-3.3",
+          "pin": "GND"
+        },
+        {
+          "ref": "C1",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C2",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GND_1"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GND_2"
+        },
+        {
+          "ref": "C3",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C4",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C5",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C6",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "GND"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "GND"
+        },
+        {
+          "ref": "C7",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C10",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "U4",
+          "component_type": "ATECC608A",
+          "pin": "GND"
+        },
+        {
+          "ref": "C8",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "C9",
+          "component_type": "Capacitor",
+          "pin": "2"
+        },
+        {
+          "ref": "U5",
+          "component_type": "TTP223",
+          "pin": "GND"
+        },
+        {
+          "ref": "R5",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "D1",
+          "component_type": "LED",
+          "pin": "K"
+        },
+        {
+          "ref": "D2",
+          "component_type": "LED",
+          "pin": "K"
+        },
+        {
+          "ref": "SW1",
+          "component_type": "PushButton",
+          "pin": "2"
+        },
+        {
+          "ref": "J2",
+          "component_type": "SWD_Header",
+          "pin": "GND"
+        }
+      ]
+    },
+    {
+      "name": "I2C_SCL",
+      "label": "I2C_SCL",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP5"
+        },
+        {
+          "ref": "U4",
+          "component_type": "ATECC608A",
+          "pin": "SCL"
+        },
+        {
+          "ref": "R4",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "I2C_SDA",
+      "label": "I2C_SDA",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP4"
+        },
+        {
+          "ref": "U4",
+          "component_type": "ATECC608A",
+          "pin": "SDA"
+        },
+        {
+          "ref": "R3",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "LED1_ANODE",
+      "label": "LED1_ANODE",
+      "connections": [
+        {
+          "ref": "R6",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "D1",
+          "component_type": "LED",
+          "pin": "A"
+        }
+      ]
+    },
+    {
+      "name": "LED1_CTRL",
+      "label": "LED1_CTRL",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP0"
+        },
+        {
+          "ref": "R6",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "LED2_ANODE",
+      "label": "LED2_ANODE",
+      "connections": [
+        {
+          "ref": "R7",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "D2",
+          "component_type": "LED",
+          "pin": "A"
+        }
+      ]
+    },
+    {
+      "name": "LED2_CTRL",
+      "label": "LED2_CTRL",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP1"
+        },
+        {
+          "ref": "R7",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_CSN_FLASH",
+      "label": "QSPI_CSN_FLASH",
+      "connections": [
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "CS"
+        },
+        {
+          "ref": "SW1",
+          "component_type": "PushButton",
+          "pin": "1"
+        },
+        {
+          "ref": "R10",
+          "component_type": "Resistor",
+          "pin": "2"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_CSN_MCU",
+      "label": "QSPI_CSN_MCU",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "BOOTSEL"
+        },
+        {
+          "ref": "R10",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SCLK",
+      "label": "QSPI_SCLK",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SCLK"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "CLK"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD0",
+      "label": "QSPI_SD0",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD0"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "DI"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD1",
+      "label": "QSPI_SD1",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD1"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "DO"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD2",
+      "label": "QSPI_SD2",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD2"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "WP"
+        }
+      ]
+    },
+    {
+      "name": "QSPI_SD3",
+      "label": "QSPI_SD3",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "QSPI_SD3"
+        },
+        {
+          "ref": "U6",
+          "component_type": "W25Q128",
+          "pin": "HOLD"
+        }
+      ]
+    },
+    {
+      "name": "SPI_CLK",
+      "label": "SPI_CLK",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP18"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "CLK"
+        }
+      ]
+    },
+    {
+      "name": "SPI_CS",
+      "label": "SPI_CS",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP17"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "CS"
+        }
+      ]
+    },
+    {
+      "name": "SPI_MISO",
+      "label": "SPI_MISO",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP16"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "DO"
+        }
+      ]
+    },
+    {
+      "name": "SPI_MOSI",
+      "label": "SPI_MOSI",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP19"
+        },
+        {
+          "ref": "U3",
+          "component_type": "W25Q128",
+          "pin": "DI"
+        }
+      ]
+    },
+    {
+      "name": "SWCLK",
+      "label": "SWCLK",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "SWCLK"
+        },
+        {
+          "ref": "J2",
+          "component_type": "SWD_Header",
+          "pin": "SWCLK"
+        }
+      ]
+    },
+    {
+      "name": "SWDIO",
+      "label": "SWDIO",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "SWDIO"
+        },
+        {
+          "ref": "J2",
+          "component_type": "SWD_Header",
+          "pin": "SWDIO"
+        }
+      ]
+    },
+    {
+      "name": "TOUCH_OUT",
+      "label": "TOUCH_OUT",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "GP15"
+        },
+        {
+          "ref": "U5",
+          "component_type": "TTP223",
+          "pin": "OUT"
+        },
+        {
+          "ref": "R5",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "USB_DM",
+      "label": "USB_DM",
+      "connections": [
+        {
+          "ref": "R9",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "USB_DM"
+        }
+      ]
+    },
+    {
+      "name": "USB_DM_CONN",
+      "label": "USB_DM_CONN",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "D-"
+        },
+        {
+          "ref": "R9",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "USB_DP",
+      "label": "USB_DP",
+      "connections": [
+        {
+          "ref": "R8",
+          "component_type": "Resistor",
+          "pin": "2"
+        },
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "USB_DP"
+        }
+      ]
+    },
+    {
+      "name": "USB_DP_CONN",
+      "label": "USB_DP_CONN",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "D+"
+        },
+        {
+          "ref": "R8",
+          "component_type": "Resistor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "VBUS",
+      "label": "VBUS",
+      "connections": [
+        {
+          "ref": "J1",
+          "component_type": "USB_C",
+          "pin": "VBUS"
+        },
+        {
+          "ref": "U1",
+          "component_type": "AMS1117-3.3",
+          "pin": "VIN"
+        },
+        {
+          "ref": "C1",
+          "component_type": "Capacitor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "XIN",
+      "label": "XIN",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "XIN"
+        },
+        {
+          "ref": "Y1",
+          "component_type": "Crystal",
+          "pin": "1"
+        },
+        {
+          "ref": "C8",
+          "component_type": "Capacitor",
+          "pin": "1"
+        }
+      ]
+    },
+    {
+      "name": "XOUT",
+      "label": "XOUT",
+      "connections": [
+        {
+          "ref": "U2",
+          "component_type": "RP2040",
+          "pin": "XOUT"
+        },
+        {
+          "ref": "Y1",
+          "component_type": "Crystal",
+          "pin": "2"
+        },
+        {
+          "ref": "C9",
+          "component_type": "Capacitor",
+          "pin": "1"
+        }
+      ]
+    }
+  ],
+  "wire_connections": [
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C2.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U2.3V3_1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U2.3V3_2"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U2.3V3_3"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C3.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C4.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C5.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C6.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U3.VCC"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U6.VCC"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C7.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "C10.1"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U4.VCC"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "R3.2"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "R4.2"
+    },
+    {
+      "net": "3V3",
+      "from": "U1.VOUT",
+      "to": "U5.VDD"
+    },
+    {
+      "net": "CC1_NET",
+      "from": "J1.CC1",
+      "to": "R1.1"
+    },
+    {
+      "net": "CC2_NET",
+      "from": "J1.CC2",
+      "to": "R2.1"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "R1.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "R2.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U1.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C1.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C2.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U2.GND_1"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U2.GND_2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C3.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C4.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C5.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C6.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U3.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U6.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C7.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C10.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U4.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C8.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "C9.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "U5.GND"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "R5.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "D1.K"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "D2.K"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "SW1.2"
+    },
+    {
+      "net": "GND",
+      "from": "J1.GND",
+      "to": "J2.GND"
+    },
+    {
+      "net": "I2C_SCL",
+      "from": "U2.GP5",
+      "to": "U4.SCL"
+    },
+    {
+      "net": "I2C_SCL",
+      "from": "U2.GP5",
+      "to": "R4.1"
+    },
+    {
+      "net": "I2C_SDA",
+      "from": "U2.GP4",
+      "to": "U4.SDA"
+    },
+    {
+      "net": "I2C_SDA",
+      "from": "U2.GP4",
+      "to": "R3.1"
+    },
+    {
+      "net": "LED1_ANODE",
+      "from": "R6.2",
+      "to": "D1.A"
+    },
+    {
+      "net": "LED1_CTRL",
+      "from": "U2.GP0",
+      "to": "R6.1"
+    },
+    {
+      "net": "LED2_ANODE",
+      "from": "R7.2",
+      "to": "D2.A"
+    },
+    {
+      "net": "LED2_CTRL",
+      "from": "U2.GP1",
+      "to": "R7.1"
+    },
+    {
+      "net": "QSPI_CSN_FLASH",
+      "from": "U6.CS",
+      "to": "SW1.1"
+    },
+    {
+      "net": "QSPI_CSN_FLASH",
+      "from": "U6.CS",
+      "to": "R10.2"
+    },
+    {
+      "net": "QSPI_CSN_MCU",
+      "from": "U2.BOOTSEL",
+      "to": "R10.1"
+    },
+    {
+      "net": "QSPI_SCLK",
+      "from": "U2.QSPI_SCLK",
+      "to": "U6.CLK"
+    },
+    {
+      "net": "QSPI_SD0",
+      "from": "U2.QSPI_SD0",
+      "to": "U6.DI"
+    },
+    {
+      "net": "QSPI_SD1",
+      "from": "U2.QSPI_SD1",
+      "to": "U6.DO"
+    },
+    {
+      "net": "QSPI_SD2",
+      "from": "U2.QSPI_SD2",
+      "to": "U6.WP"
+    },
+    {
+      "net": "QSPI_SD3",
+      "from": "U2.QSPI_SD3",
+      "to": "U6.HOLD"
+    },
+    {
+      "net": "SPI_CLK",
+      "from": "U2.GP18",
+      "to": "U3.CLK"
+    },
+    {
+      "net": "SPI_CS",
+      "from": "U2.GP17",
+      "to": "U3.CS"
+    },
+    {
+      "net": "SPI_MISO",
+      "from": "U2.GP16",
+      "to": "U3.DO"
+    },
+    {
+      "net": "SPI_MOSI",
+      "from": "U2.GP19",
+      "to": "U3.DI"
+    },
+    {
+      "net": "SWCLK",
+      "from": "U2.SWCLK",
+      "to": "J2.SWCLK"
+    },
+    {
+      "net": "SWDIO",
+      "from": "U2.SWDIO",
+      "to": "J2.SWDIO"
+    },
+    {
+      "net": "TOUCH_OUT",
+      "from": "U2.GP15",
+      "to": "U5.OUT"
+    },
+    {
+      "net": "TOUCH_OUT",
+      "from": "U2.GP15",
+      "to": "R5.1"
+    },
+    {
+      "net": "USB_DM",
+      "from": "R9.2",
+      "to": "U2.USB_DM"
+    },
+    {
+      "net": "USB_DM_CONN",
+      "from": "J1.D-",
+      "to": "R9.1"
+    },
+    {
+      "net": "USB_DP",
+      "from": "R8.2",
+      "to": "U2.USB_DP"
+    },
+    {
+      "net": "USB_DP_CONN",
+      "from": "J1.D+",
+      "to": "R8.1"
+    },
+    {
+      "net": "VBUS",
+      "from": "J1.VBUS",
+      "to": "U1.VIN"
+    },
+    {
+      "net": "VBUS",
+      "from": "J1.VBUS",
+      "to": "C1.1"
+    },
+    {
+      "net": "XIN",
+      "from": "U2.XIN",
+      "to": "Y1.1"
+    },
+    {
+      "net": "XIN",
+      "from": "U2.XIN",
+      "to": "C8.1"
+    },
+    {
+      "net": "XOUT",
+      "from": "U2.XOUT",
+      "to": "Y1.2"
+    },
+    {
+      "net": "XOUT",
+      "from": "U2.XOUT",
+      "to": "C9.1"
+    }
+  ],
+  "net_labels": [
+    "3V3",
+    "CC1_NET",
+    "CC2_NET",
+    "GND",
+    "I2C_SCL",
+    "I2C_SDA",
+    "LED1_ANODE",
+    "LED1_CTRL",
+    "LED2_ANODE",
+    "LED2_CTRL",
+    "QSPI_CSN_FLASH",
+    "QSPI_CSN_MCU",
+    "QSPI_SCLK",
+    "QSPI_SD0",
+    "QSPI_SD1",
+    "QSPI_SD2",
+    "QSPI_SD3",
+    "SPI_CLK",
+    "SPI_CS",
+    "SPI_MISO",
+    "SPI_MOSI",
+    "SWCLK",
+    "SWDIO",
+    "TOUCH_OUT",
+    "USB_DM",
+    "USB_DM_CONN",
+    "USB_DP",
+    "USB_DP_CONN",
+    "VBUS",
+    "XIN",
+    "XOUT"
+  ],
+  "metadata": {
+    "notes": [
+      "Full connectivity generated from logical net assignments.",
+      "RP2040 pin numbers are exact QFN-56 package pins from RP2040 datasheet table 615-621.",
+      "Footprints are assigned as KiCad-compatible library identifiers.",
+      "ERC verifies USB series resistors and complete RP2040 QSPI boot flash wiring."
+    ]
+  }
+}
