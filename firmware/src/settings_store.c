@@ -9,6 +9,7 @@
 #include "security_utils.h"
 #include "security_policy.h"
 #include "storage_backend.h"
+#include "build_config.h"
 
 typedef struct {
   bool initialized;
@@ -54,17 +55,31 @@ static void settings_store_nonce(const settings_blob_t *blob, uint8_t out_nonce[
 }
 
 void settings_store_init(void) {
+  uint8_t device_secret[32];
+  const uint8_t default_master_key[32] = {
+      0x2Du, 0x81u, 0x57u, 0x9Au, 0x44u, 0xC6u, 0x31u, 0xE2u,
+      0x0Fu, 0xB8u, 0x5Cu, 0xD3u, 0x6Au, 0x19u, 0xAEu, 0x70u,
+      0x83u, 0x2Fu, 0xC9u, 0x14u, 0x5Bu, 0xE7u, 0x3Au, 0x91u,
+      0x68u, 0x04u, 0xDDu, 0x27u, 0xB1u, 0x5Eu, 0xF0u, 0x3Cu,
+  };
+  const uint8_t default_atecc_pubkey[32] = {
+      0xA1u, 0x44u, 0x7Cu, 0x2Eu, 0x53u, 0xD7u, 0x1Bu, 0x90u,
+      0x6Fu, 0x08u, 0xC2u, 0x35u, 0xE4u, 0x79u, 0x1Du, 0xAFu,
+      0x58u, 0xCBu, 0x21u, 0x63u, 0x96u, 0x0Au, 0xF5u, 0x3Du,
+      0xB0u, 0x47u, 0x89u, 0x12u, 0xD8u, 0x6Cu, 0x24u, 0xFEu,
+  };
+  size_t i;
   memset(&g_settings_store, 0, sizeof(g_settings_store));
   storage_backend_init();
   storage_backend_wipe();
   crypto_engine_init();
-  {
-    const uint8_t default_key[] = {
-        0x31u, 0x52u, 0xA4u, 0x18u, 0x09u, 0x7Fu, 0xC3u, 0x44u,
-        0x8Eu, 0x20u, 0xB7u, 0x5Du, 0x11u, 0xE2u, 0x66u, 0x90u,
-    };
-    crypto_engine_set_master_key(default_key, sizeof(default_key));
+  crypto_engine_set_master_key(default_master_key, sizeof(default_master_key));
+  for (i = 0u; i < sizeof(device_secret); ++i) {
+    device_secret[i] = (uint8_t)(0xA5u ^ (uint8_t)(i * 13u));
   }
+  (void)crypto_engine_set_device_secret(device_secret, sizeof(device_secret));
+  (void)crypto_engine_bind_atecc_slot(0u, default_atecc_pubkey, sizeof(default_atecc_pubkey));
+  security_secure_zero(device_secret, sizeof(device_secret));
   g_settings_store.initialized = true;
 }
 
@@ -219,6 +234,13 @@ bool settings_store_debug_snapshot(settings_blob_t *out_blob,
                                    uint8_t *out_payload,
                                    size_t out_payload_capacity,
                                    size_t *out_payload_len) {
+#if FIRMWARE_PRODUCTION
+  (void)out_blob;
+  (void)out_payload;
+  (void)out_payload_capacity;
+  (void)out_payload_len;
+  return false;
+#else
   if (!g_settings_store.initialized || out_blob == NULL ||
       out_payload == NULL || out_payload_len == NULL) {
     return false;
@@ -231,11 +253,18 @@ bool settings_store_debug_snapshot(settings_blob_t *out_blob,
   memcpy(out_payload, g_settings_store.encrypted_payload, g_settings_store.encrypted_payload_len);
   *out_payload_len = g_settings_store.encrypted_payload_len;
   return true;
+#endif
 }
 
 bool settings_store_debug_restore(const settings_blob_t *blob,
                                   const uint8_t *payload,
                                   size_t payload_len) {
+#if FIRMWARE_PRODUCTION
+  (void)blob;
+  (void)payload;
+  (void)payload_len;
+  return false;
+#else
   if (!g_settings_store.initialized || blob == NULL || payload == NULL) {
     return false;
   }
@@ -246,5 +275,6 @@ bool settings_store_debug_restore(const settings_blob_t *blob,
   memcpy(g_settings_store.encrypted_payload, payload, payload_len);
   g_settings_store.encrypted_payload_len = payload_len;
   return true;
+#endif
 }
 

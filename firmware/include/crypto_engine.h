@@ -15,10 +15,12 @@ typedef struct {
   bool aead_interface_ready;
   bool kdf_interface_ready;
   bool secure_element_bound;
+  bool production_mode;
 } crypto_engine_status_t;
 
 void crypto_engine_init(void);
 void crypto_engine_set_master_key(const uint8_t *key, size_t key_len);
+bool crypto_engine_set_device_secret(const uint8_t *secret, size_t secret_len);
 bool crypto_engine_bind_atecc_slot(uint8_t slot_id,
                                    const uint8_t *public_key,
                                    size_t public_key_len);

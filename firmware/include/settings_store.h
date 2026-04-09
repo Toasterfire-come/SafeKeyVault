@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "firmware_types.h"
+#include "build_config.h"
 
 typedef struct {
   uint32_t version;

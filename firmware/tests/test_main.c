@@ -14,6 +14,8 @@
 #include "settings_store.h"
 #include "state_machine.h"
 #include "crypto_engine.h"
+#include "build_config.h"
+#include "build_config.h"
 #include "storage_backend.h"
 
 static void test_state_machine_lockout_and_wipe(void) {
@@ -181,6 +183,17 @@ static void test_action_engine_fill_save_generate_select(void) {
   state_machine_init(&ctx);
   password_store_init(&vault);
   action_engine_init(&engine, &vault, &ctx);
+#if FIRMWARE_PRODUCTION
+  {
+    uint8_t device_secret[32];
+    uint8_t pubkey[32] = {0};
+    for (size_t i = 0u; i < sizeof(device_secret); ++i) {
+      device_secret[i] = (uint8_t)(0xC3u ^ (uint8_t)i);
+    }
+    assert(crypto_engine_set_device_secret(device_secret, sizeof(device_secret)));
+    assert(crypto_engine_bind_atecc_slot(1u, pubkey, sizeof(pubkey)));
+  }
+#endif
   assert(state_machine_try_unlock(&ctx, "12345"));
 
   memset(&cmd, 0, sizeof(cmd));
@@ -394,6 +407,13 @@ static void test_command_codec_and_settings_store(void) {
 }
 
 static void test_settings_store_crypto_tamper_rejected(void) {
+#if FIRMWARE_PRODUCTION
+  /*
+   * Debug snapshot/restore interfaces are intentionally disabled in production
+   * mode. Tamper simulation remains a development-only test hook.
+   */
+  return;
+#else
   runtime_settings_t settings = {
       .auto_popup_enabled = true,
       .manual_popup_requires_touch = false,
@@ -419,6 +439,7 @@ static void test_settings_store_crypto_tamper_rejected(void) {
   assert(settings_store_save(&settings));
   assert(settings_store_load(&loaded));
   assert(loaded.autolock_seconds == settings.autolock_seconds);
+#endif
 }
 
 static void test_storage_backend_atomic_slots(void) {
@@ -661,6 +682,7 @@ static void test_secure_wipe_for_vault(void) {
 static void test_crypto_engine_interfaces(void) {
   crypto_engine_status_t status;
   uint8_t salt[8] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
+  uint8_t dev_secret[32];
   uint8_t pin_key[32] = {0};
   uint8_t pubkey[32] = {0};
   uint8_t tag[16] = {0};
@@ -672,9 +694,17 @@ static void test_crypto_engine_interfaces(void) {
   uint8_t fp[16] = {0};
 
   crypto_engine_init();
+#if FIRMWARE_PRODUCTION
+  memset(dev_secret, 0x5Au, sizeof(dev_secret));
+  crypto_engine_set_master_key(dev_secret, sizeof(dev_secret));
+  assert(crypto_engine_set_device_secret(dev_secret, sizeof(dev_secret)));
+#endif
   status = crypto_engine_get_status();
   assert(status.aead_interface_ready);
   assert(status.kdf_interface_ready);
+#if FIRMWARE_PRODUCTION
+  assert(status.production_mode);
+#endif
   assert(!status.secure_element_bound);
 
   assert(crypto_engine_derive_pin_key("12345", salt, sizeof(salt), pin_key));

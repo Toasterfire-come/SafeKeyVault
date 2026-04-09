@@ -4,6 +4,7 @@ project(rp2040_password_key_firmware C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+option(FIRMWARE_PRODUCTION "Enable production hardening mode" OFF)
 
 add_library(firmware_core
   src/action_engine.c
@@ -31,6 +32,12 @@ target_include_directories(firmware_core
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+if(FIRMWARE_PRODUCTION)
+  target_compile_definitions(firmware_core PUBLIC FIRMWARE_PRODUCTION=1)
+else()
+  target_compile_definitions(firmware_core PUBLIC FIRMWARE_PRODUCTION=0)
+endif()
 
 add_executable(firmware_tests
   tests/test_main.c
