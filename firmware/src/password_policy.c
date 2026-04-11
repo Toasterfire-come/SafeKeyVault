@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "common_passwords.h"
+#include "crypto_engine.h" // For secure zeroization
 
 static bool (*g_reuse_checker)(const char *candidate) = NULL;
 static const char *const *g_common_list = NULL;

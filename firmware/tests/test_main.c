@@ -15,8 +15,48 @@
 #include "state_machine.h"
 #include "crypto_engine.h"
 #include "build_config.h"
-#include "build_config.h"
 #include "storage_backend.h"
+#include "platform_hal.h" // For simulated hardware interactions
+
+// Mock platform HAL for host tests
+static platform_hal_status_t g_mock_hal_status = {0};
+
+void platform_hal_init(void) {
+  g_mock_hal_status.initialized = true;
+}
+
+void platform_hal_tick(void) {
+  g_mock_hal_status.tick_count++;
+}
+
+void platform_hal_led_set(platform_hal_led_t led, bool on) {
+  if (led == PLATFORM_HAL_LED_LOCKED) {
+    g_mock_hal_status.led_locked_on = on;
+  } else if (led == PLATFORM_HAL_LED_ACTIVITY) {
+    g_mock_hal_status.led_activity_on = on;
+  }
+}
+
+void platform_hal_touch_set_simulated(bool pressed, bool held) {
+  g_mock_hal_status.touch_pressed = pressed;
+  g_mock_hal_status.touch_held = held;
+}
+
+bool platform_hal_usb_hid_type(const char *text) {
+  // In host tests, we don't actually type anything.
+  // We can optionally log this for debugging.
+  // printf("SIMULATED HID TYPE: %s\n", text);
+  return true;
+}
+
+bool platform_hal_get_status(platform_hal_status_t *out_status) {
+  if (out_status == NULL) {
+    return false;
+  }
+  *out_status = g_mock_hal_status;
+  return true;
+}
+
 
 static void test_state_machine_lockout_and_wipe(void) {
   device_context_t ctx;
@@ -179,14 +219,22 @@ static void test_action_engine_fill_save_generate_select(void) {
   action_engine_t engine;
   ActionResult out;
   BrowserCommand cmd;
+  runtime_settings_t settings = {
+      .auto_popup_enabled = true,
+      .manual_popup_requires_touch = true,
+      .require_touch_for_fill = true,
+      .hold_required_for_selection = true,
+      .autolock_seconds = 60u,
+  };
 
+  state_machine_apply_settings(&settings);
   state_machine_init(&ctx);
   password_store_init(&vault);
   action_engine_init(&engine, &vault, &ctx);
 #if FIRMWARE_PRODUCTION
   {
     uint8_t device_secret[32];
-    uint8_t pubkey[32] = {0};
+    uint8_t pubkey[32] = {0}; // Placeholder, actual key would be provisioned
     for (size_t i = 0u; i < sizeof(device_secret); ++i) {
       device_secret[i] = (uint8_t)(0xC3u ^ (uint8_t)i);
     }
@@ -194,7 +242,7 @@ static void test_action_engine_fill_save_generate_select(void) {
     assert(crypto_engine_bind_atecc_slot(1u, pubkey, sizeof(pubkey)));
   }
 #endif
-  assert(state_machine_try_unlock(&ctx, "12345"));
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
 
   memset(&cmd, 0, sizeof(cmd));
   cmd.type = BROWSER_CMD_REQUEST_SAVE;
@@ -260,7 +308,7 @@ static void test_action_engine_auto_popup_modes(void) {
   state_machine_init(&ctx);
   password_store_init(&vault);
   action_engine_init(&engine, &vault, &ctx);
-  assert(state_machine_try_unlock(&ctx, "12345"));
+  assert(action_engine_unlock_with_pin(&engine, "12345"));
 
   memset(&cmd, 0, sizeof(cmd));
   cmd.type = BROWSER_CMD_REQUEST_SAVE;
@@ -509,11 +557,12 @@ static void test_device_only_flow(void) {
   action_engine_t engine;
   ActionResult out = {0};
 
-  assert(action_engine_try_change_pin(&engine, "54321", "12345") || true);
-  state_machine_init(&ctx);
+  // Ensure PIN change works correctly
+  assert(action_engine_try_change_pin(&engine, "12345", "54321"));
+  state_machine_init(&ctx); // Re-initialize context to simulate fresh boot
   password_store_init(&vault);
   action_engine_init(&engine, &vault, &ctx);
-  assert(action_engine_unlock_with_pin(&engine, "12345"));
+  assert(action_engine_unlock_with_pin(&engine, "54321")); // Use new PIN
 
   assert(action_engine_device_save_credential(
       &engine, "https://device-only.example", "alice", "StrongDevice9!", &out));
@@ -684,7 +733,7 @@ static void test_crypto_engine_interfaces(void) {
   uint8_t salt[8] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
   uint8_t dev_secret[32];
   uint8_t pin_key[32] = {0};
-  uint8_t pubkey[32] = {0};
+  uint8_t pubkey[32] = {0}; // Placeholder for ATECC public key
   uint8_t tag[16] = {0};
   uint8_t plaintext[32] = "hello-aead";
   uint8_t ciphertext[32] = {0};

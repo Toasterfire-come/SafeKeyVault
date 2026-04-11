@@ -48,6 +48,27 @@
     },
     {
       "name": "QSPI_SD3"
+    },
+    {
+      "name": "I2C1_SCL"
+    },
+    {
+      "name": "I2C1_SDA"
+    },
+    {
+      "name": "SWDIO"
+    },
+    {
+      "name": "SWCLK"
+    },
+    {
+      "name": "LED1_CTRL"
+    },
+    {
+      "name": "LED2_CTRL"
+    },
+    {
+      "name": "TOUCH_OUT"
     }
   ],
   "components": [
@@ -142,13 +163,13 @@
         "XOUT": "XOUT",
         "PA0": "LED1_CTRL",
         "PA1": "LED2_CTRL",
-        "PB7": "I2C_SDA",
-        "PB6": "I2C_SCL",
+        "PB7": "I2C1_SDA",
+        "PB6": "I2C1_SCL",
         "PC13": "TOUCH_OUT",
-        "PA6": "SPI_MISO",
-        "PA4": "SPI_CS",
-        "PA5": "SPI_CLK",
-        "PA7": "SPI_MOSI",
+        "PA6": "SPI1_MISO",
+        "PA4": "SPI1_CS",
+        "PA5": "SPI1_CLK",
+        "PA7": "SPI1_MOSI",
         "PB2": "QSPI_CSN_MCU",
         "SWDIO": "SWDIO",
         "SWCLK": "SWCLK",
@@ -201,10 +222,10 @@
       "pins": {
         "VCC": "3V3",
         "GND": "GND",
-        "CS": "SPI_CS",
-        "CLK": "SPI_CLK",
-        "DI": "SPI_MOSI",
-        "DO": "SPI_MISO"
+        "CS": "SPI1_CS",
+        "CLK": "SPI1_CLK",
+        "DI": "SPI1_MOSI",
+        "DO": "SPI1_MISO"
       }
     },
     {
@@ -245,8 +266,8 @@
       "pins": {
         "VCC": "3V3",
         "GND": "GND",
-        "SDA": "I2C_SDA",
-        "SCL": "I2C_SCL"
+        "SDA": "I2C1_SDA",
+        "SCL": "I2C1_SCL"
       }
     },
     {
@@ -254,7 +275,7 @@
       "type": "Resistor",
       "value": "4.7k",
       "pins": {
-        "1": "I2C_SDA",
+        "1": "I2C1_SDA",
         "2": "3V3"
       }
     },
@@ -263,7 +284,7 @@
       "type": "Resistor",
       "value": "4.7k",
       "pins": {
-        "1": "I2C_SCL",
+        "1": "I2C1_SCL",
         "2": "3V3"
       }
     },

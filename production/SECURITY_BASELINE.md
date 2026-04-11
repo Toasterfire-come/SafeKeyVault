@@ -18,7 +18,7 @@ This file defines the minimum required production controls for this firmware.
 
 ## USB/session channel
 
-- Require successful session authentication before processing sensitive requests.
+- Require successful session authentication before processing sensitive commands.
 - Reject replayed or tampered payloads.
 
 ## Secure boot/update
@@ -31,4 +31,3 @@ This file defines the minimum required production controls for this firmware.
 - Use atomic storage writes and latest-valid-record reads.
 - Reject schema mismatches and corrupted payloads.
 - Ensure encrypted settings payloads pass tag/auth checks before use.
-

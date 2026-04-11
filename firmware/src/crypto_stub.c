@@ -27,10 +27,10 @@ bool crypto_stub_encrypt_password(const char *plaintext, char *ciphertext_out, s
     return false;
   }
   ciphertext_out[0] = '\0';
+  // For tests, operate even without a configured key. Use a default if none set.
   if (g_master_key_len == 0u) {
-    /* For tests, operate even without a configured key. */
-    g_master_key[0] = 0x5Au;
-    g_master_key_len = 1u;
+    const uint8_t default_key[32] = {0x5A}; // Use a single byte default key
+    crypto_stub_set_master_key(default_key, sizeof(default_key));
   }
   for (i = 0u; plaintext[i] != '\0' && i + 1u < out_len; ++i) {
     uint8_t p = (uint8_t)plaintext[i];
@@ -47,9 +47,10 @@ bool crypto_stub_decrypt_password(const char *ciphertext, char *plaintext_out, s
     return false;
   }
   plaintext_out[0] = '\0';
+  // For tests, operate even without a configured key. Use a default if none set.
   if (g_master_key_len == 0u) {
-    g_master_key[0] = 0x5Au;
-    g_master_key_len = 1u;
+    const uint8_t default_key[32] = {0x5A}; // Use a single byte default key
+    crypto_stub_set_master_key(default_key, sizeof(default_key));
   }
   for (i = 0u; ciphertext[i] != '\0' && i + 1u < out_len; ++i) {
     uint8_t c = (uint8_t)ciphertext[i];
@@ -61,36 +62,40 @@ bool crypto_stub_decrypt_password(const char *ciphertext, char *plaintext_out, s
 }
 
 void crypto_stub_password_fingerprint(const char *password, uint8_t out_fp[16], size_t out_len) {
-  uint32_t h = 2166136261u;
+  uint32_t h = 2166136261u; // FNV-1a initial hash value
   size_t i = 0u;
   if (out_fp == NULL || out_len == 0u) {
     return;
   }
-  memset(out_fp, 0, out_len);
+  memset(out_fp, 0, out_len); // Zero out the output buffer
   if (password == NULL) {
-    return;
+    return; // No password, return zeroed buffer
   }
   while (password[i] != '\0') {
     h ^= (uint8_t)password[i];
-    h *= 16777619u;
+    h *= 16777619u; // FNV-1a prime
+    // XOR the hash byte into the output buffer to mix it in.
+    // This is a simple mixing, not a cryptographic hash.
     out_fp[i % out_len] ^= (uint8_t)(h & 0xFFu);
     i++;
   }
 }
 
 void crypto_stub_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]) {
-  uint32_t h = 2166136261u;
+  uint32_t h = 2166136261u; // FNV-1a initial hash value
   size_t i;
   if (out_fp == NULL) {
     return;
   }
-  memset(out_fp, 0, 16u);
+  memset(out_fp, 0, 16u); // Zero out the output buffer
   if (data == NULL) {
-    return;
+    return; // No data, return zeroed buffer
   }
   for (i = 0u; i < data_len; ++i) {
     h ^= data[i];
-    h *= 16777619u;
+    h *= 16777619u; // FNV-1a prime
+    // XOR the hash byte into the output buffer to mix it in.
+    // This is a simple mixing, not a cryptographic hash.
     out_fp[i % 16u] ^= (uint8_t)(h & 0xFFu);
   }
 }

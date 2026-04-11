@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "crypto_engine.h" // For secure zeroization
+
 typedef struct {
   bool valid;
   uint32_t generation;
@@ -124,6 +126,10 @@ bool storage_backend_debug_corrupt_latest(void) {
 bool storage_backend_wipe(void) {
   if (!g_storage_backend.initialized) {
     return false;
+  }
+  // Securely zeroize all storage slots before wiping.
+  for (size_t i = 0; i < STORAGE_BACKEND_SLOTS; ++i) {
+    security_secure_zero(&g_storage_backend.slots[i], sizeof(storage_slot_internal_t));
   }
   memset(&g_storage_backend, 0, sizeof(g_storage_backend));
   g_storage_backend.initialized = true;

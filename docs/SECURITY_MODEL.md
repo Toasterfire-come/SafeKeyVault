@@ -31,4 +31,3 @@
 2. Never perform sensitive actions without physical touch/hold confirmation.
 3. Manual popup gate must be respected when enabled.
 4. Command parser must reject malformed/oversized payloads.
-

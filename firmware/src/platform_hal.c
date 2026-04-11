@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+// Mock platform HAL state for host tests.
+// In a real embedded environment, this would interact with hardware registers.
 typedef struct {
   bool initialized;
   bool led_locked_on;
@@ -21,12 +23,17 @@ void platform_hal_init(void) {
   g_hal.initialized = true;
 }
 
+void platform_hal_tick(void) {
+  g_hal.tick_count++;
+}
+
 void platform_hal_led_set(platform_hal_led_t led, bool on) {
   if (led == PLATFORM_HAL_LED_LOCKED) {
     g_hal.led_locked_on = on;
   } else if (led == PLATFORM_HAL_LED_ACTIVITY) {
     g_hal.led_activity_on = on;
   }
+  // Other LEDs (ERROR, OFF) are not explicitly managed here in the mock.
 }
 
 void platform_hal_touch_set_simulated(bool pressed, bool held) {
@@ -34,8 +41,11 @@ void platform_hal_touch_set_simulated(bool pressed, bool held) {
   g_hal.touch_held = held;
 }
 
-void platform_hal_tick(void) {
-  g_hal.tick_count++;
+bool platform_hal_usb_hid_type(const char *text) {
+  // In host tests, we don't actually type anything.
+  // We can optionally log this for debugging.
+  // printf("SIMULATED HID TYPE: %s\n", text);
+  return true; // Assume success for simulation
 }
 
 bool platform_hal_get_status(platform_hal_status_t *out_status) {

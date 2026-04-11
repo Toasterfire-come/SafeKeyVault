@@ -71,6 +71,8 @@ void settings_store_init(void) {
   size_t i;
   memset(&g_settings_store, 0, sizeof(g_settings_store));
   storage_backend_init();
+  // Wipe storage on init to ensure a clean state, especially for tests.
+  // In production, this might be conditional or handled by a separate factory reset.
   storage_backend_wipe();
   crypto_engine_init();
   crypto_engine_set_master_key(default_master_key, sizeof(default_master_key));
@@ -78,7 +80,8 @@ void settings_store_init(void) {
     device_secret[i] = (uint8_t)(0xA5u ^ (uint8_t)(i * 13u));
   }
   (void)crypto_engine_set_device_secret(device_secret, sizeof(device_secret));
-  (void)crypto_engine_bind_atecc_slot(0u, default_atecc_pubkey, sizeof(default_atecc_pubkey));
+  // Bind a dummy public key for ATECC simulation. In production, this would be the actual device's public key.
+  (void)crypto_engine_bind_atecc_slot(ATECC608A_SLOT_ID_PUBKEY, default_atecc_pubkey, sizeof(default_atecc_pubkey));
   security_secure_zero(device_secret, sizeof(device_secret));
   g_settings_store.initialized = true;
 }
@@ -108,6 +111,8 @@ bool settings_store_save(const runtime_settings_t *settings) {
                                   &ciphertext_len,
                                   tag)) {
     security_secure_zero(plaintext, sizeof(plaintext));
+    security_secure_zero(tag, sizeof(tag));
+    security_secure_zero(nonce, sizeof(nonce));
     return false;
   }
   g_settings_store.encrypted_payload_len = ciphertext_len;
@@ -115,7 +120,9 @@ bool settings_store_save(const runtime_settings_t *settings) {
   g_settings_store.blob = blob;
 
   memset(record, 0, sizeof(record));
-  memcpy(record, &g_settings_store.encrypted_payload_len, sizeof(uint32_t));
+  // Store the length of the encrypted payload before the blob and payload itself
+  uint32_t stored_payload_len = (uint32_t)g_settings_store.encrypted_payload_len;
+  memcpy(record, &stored_payload_len, sizeof(stored_payload_len));
   memcpy(record + 4u, &g_settings_store.blob, sizeof(settings_blob_t));
   memcpy(record + 4u + sizeof(settings_blob_t),
          g_settings_store.encrypted_payload,
@@ -141,30 +148,33 @@ bool settings_store_load(runtime_settings_t *settings) {
   uint8_t plaintext[sizeof(settings_blob_t)];
   uint8_t nonce[12];
   size_t plaintext_len = sizeof(plaintext);
+  uint8_t record[4u + sizeof(settings_blob_t) + STORAGE_BACKEND_MAX_PAYLOAD]; // Max possible size
+  size_t record_len = 0u;
+  uint32_t stored_payload_len = 0u;
+  uint32_t schema_version = 0u;
 
   if (!g_settings_store.initialized || settings == NULL) {
     return false;
   }
+
+  // Attempt to read from storage if not already loaded
   if (g_settings_store.encrypted_payload_len == 0u) {
-    uint8_t record[4u + sizeof(settings_blob_t) + sizeof(g_settings_store.encrypted_payload)];
-    size_t record_len = sizeof(record);
-    uint32_t schema_version = 0u;
-    uint32_t stored_payload_len = 0u;
+    memset(record, 0, sizeof(record));
     if (!storage_backend_read_latest(record, sizeof(record), &record_len, &schema_version)) {
       return false;
     }
     if (schema_version != SETTINGS_VERSION) {
-      return false;
+      return false; // Schema mismatch
     }
     if (record_len < (4u + sizeof(settings_blob_t))) {
-      return false;
+      return false; // Record too short
     }
     memcpy(&stored_payload_len, record, sizeof(stored_payload_len));
     if (stored_payload_len == 0u || stored_payload_len > sizeof(g_settings_store.encrypted_payload)) {
-      return false;
+      return false; // Invalid payload length
     }
     if (record_len != (4u + sizeof(settings_blob_t) + stored_payload_len)) {
-      return false;
+      return false; // Record length mismatch
     }
     memcpy(&g_settings_store.blob, record + 4u, sizeof(settings_blob_t));
     memcpy(g_settings_store.encrypted_payload,
@@ -172,10 +182,11 @@ bool settings_store_load(runtime_settings_t *settings) {
            stored_payload_len);
     g_settings_store.encrypted_payload_len = stored_payload_len;
   }
+
   blob = g_settings_store.blob;
 
   if (blob.version != SETTINGS_VERSION) {
-    return false;
+    return false; // Version mismatch
   }
   settings_store_nonce(&blob, nonce);
   if (!crypto_engine_decrypt_aead(g_settings_store.encrypted_payload,
@@ -186,12 +197,12 @@ bool settings_store_load(runtime_settings_t *settings) {
                                   &plaintext_len)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
-    return false;
+    return false; // Decryption/authentication failed
   }
   if (plaintext_len != sizeof(settings_blob_t)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
-    return false;
+    return false; // Decrypted data size mismatch
   }
   memcpy(&blob, plaintext, sizeof(blob));
   security_secure_zero(plaintext, sizeof(plaintext));
@@ -199,7 +210,7 @@ bool settings_store_load(runtime_settings_t *settings) {
 
   expected_crc = settings_crc(&blob.settings);
   if (expected_crc != blob.crc32) {
-    return false;
+    return false; // CRC mismatch indicates data corruption
   }
 
   *settings = blob.settings;
@@ -213,9 +224,13 @@ bool settings_store_wipe(void) {
   if (!g_settings_store.initialized) {
     return false;
   }
-  security_secure_zero(&g_settings_store, sizeof(g_settings_store));
-  g_settings_store.initialized = true;
+  // Securely zeroize all internal state before wiping storage.
+  security_secure_zero(&g_settings_store.blob, sizeof(g_settings_store.blob));
+  security_secure_zero(g_settings_store.encrypted_payload, g_settings_store.encrypted_payload_len);
+  g_settings_store.encrypted_payload_len = 0u;
   storage_backend_wipe();
+  // Re-initialize with default settings after wipe
+  settings_store_factory_reset();
   return true;
 }
 
@@ -239,7 +254,7 @@ bool settings_store_debug_snapshot(settings_blob_t *out_blob,
   (void)out_payload;
   (void)out_payload_capacity;
   (void)out_payload_len;
-  return false;
+  return false; // Debug interfaces disabled in production
 #else
   if (!g_settings_store.initialized || out_blob == NULL ||
       out_payload == NULL || out_payload_len == NULL) {
@@ -263,7 +278,7 @@ bool settings_store_debug_restore(const settings_blob_t *blob,
   (void)blob;
   (void)payload;
   (void)payload_len;
-  return false;
+  return false; // Debug interfaces disabled in production
 #else
   if (!g_settings_store.initialized || blob == NULL || payload == NULL) {
     return false;

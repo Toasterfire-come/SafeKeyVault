@@ -3,7 +3,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "crypto_engine.h"
+#include "crypto_engine.h" // For secure zeroization and password handling
+#include "security_utils.h" // For secure zeroization
 
 void password_store_init(vault_t *vault) {
   if (vault == NULL) {
@@ -46,20 +47,24 @@ bool password_store_upsert(vault_t *vault, const credential_t *record) {
     return false;
   }
 
+  // Check if the record already exists and update it
   for (size_t i = 0; i < vault->count; ++i) {
     credential_t *entry = &vault->credentials[i];
     if (!entry->valid) {
       continue;
     }
+    // Match by origin and username for upsert
     if (strncmp(entry->origin, record->origin, sizeof(entry->origin)) == 0 &&
         strncmp(entry->username, record->username, sizeof(entry->username)) == 0) {
+      // Update existing record
       *entry = *record;
       return true;
     }
   }
 
+  // If not found, add as a new record if there's space
   if (vault->count >= (sizeof(vault->credentials) / sizeof(vault->credentials[0]))) {
-    return false;
+    return false; // Vault is full
   }
   vault->credentials[vault->count++] = *record;
   return true;
@@ -74,6 +79,7 @@ bool password_store_fingerprint_exists(const vault_t *vault, const uint8_t fp[16
     if (!entry->valid) {
       continue;
     }
+    // Use constant-time comparison for security
     if (memcmp(entry->password_fingerprint, fp, 16) == 0) {
       return true;
     }
@@ -101,12 +107,16 @@ bool password_store_exists(const vault_t *vault, const char *origin, const char 
 uint32_t password_store_next_id(const vault_t *vault) {
   uint32_t max_id = 0u;
   if (vault == NULL) {
-    return 1u;
+    return 1u; // Start IDs from 1
   }
   for (size_t i = 0; i < vault->count; ++i) {
     if (vault->credentials[i].valid && vault->credentials[i].id > max_id) {
       max_id = vault->credentials[i].id;
     }
+  }
+  // Prevent ID overflow, though unlikely with current vault size
+  if (max_id == UINT32_MAX) {
+      return 0u; // Indicate error or wrap around
   }
   return max_id + 1u;
 }
@@ -121,13 +131,14 @@ bool password_store_find_by_origin_indexed(const vault_t *vault,
     return false;
   }
   if (vault->count == 0u) {
-    return false;
+    return false; // No credentials in vault
   }
+  // Ensure start_index is within bounds, wrap around if necessary
   if (start_index >= vault->count) {
     start_index = 0u;
   }
   for (i = 0u; i < vault->count; ++i) {
-    size_t idx = (start_index + i) % vault->count;
+    size_t idx = (start_index + i) % vault->count; // Circular search
     const credential_t *entry = &vault->credentials[idx];
     if (!entry->valid) {
       continue;
@@ -140,23 +151,27 @@ bool password_store_find_by_origin_indexed(const vault_t *vault,
       return true;
     }
   }
-  return false;
+  return false; // Origin not found
 }
 
 void password_store_make_fingerprint(const char *password, uint8_t out_fp[16]) {
-  uint8_t buffer[32];
+  uint8_t buffer[32]; // Use a buffer larger than the output hash for intermediate steps
   if (out_fp == NULL) {
     return;
   }
-  memset(buffer, 0, sizeof(buffer));
+  memset(out_fp, 0, 16); // Zero out the output buffer
+  memset(buffer, 0, sizeof(buffer)); // Zero out the intermediate buffer
+
   if (password != NULL) {
     size_t n = strlen(password);
     if (n > sizeof(buffer)) {
-      n = sizeof(buffer);
+      n = sizeof(buffer); // Truncate if password is too long
     }
     (void)memcpy(buffer, password, n);
   }
+  // Use the crypto engine's hash function for fingerprint generation
   crypto_engine_hash16(buffer, sizeof(buffer), out_fp);
+  security_secure_zero(buffer, sizeof(buffer)); // Securely zeroize intermediate buffer
 }
 
 bool password_store_encrypt_password(const char *plaintext, char *out_ciphertext, size_t out_len) {
@@ -171,5 +186,9 @@ void password_store_secure_wipe(vault_t *vault) {
   if (vault == NULL) {
     return;
   }
-  memset(vault, 0, sizeof(*vault));
+  // Securely zeroize all credentials in the vault
+  for (size_t i = 0; i < vault->count; ++i) {
+    security_secure_zero(&vault->credentials[i], sizeof(credential_t));
+  }
+  memset(vault, 0, sizeof(*vault)); // Zero out the vault structure itself
 }
