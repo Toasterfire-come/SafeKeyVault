@@ -1,5 +1,3 @@
-#ifndef PLATFORM_HAL_H
-#define PLATFORM_HAL_H
 
 #include <stdbool.h>
 #include <stddef.h>
