@@ -16,25 +16,24 @@ static uint32_t uwTickPrio = 0;
 static HAL_TickFreqTypeDef uwTickFreq = HAL_TICK_FREQ_DEFAULT;
 
 // Handle structures for peripherals
+// Note: These need to be declared as extern if they are defined in a CubeMX generated main.c/usb_pcd.c
+// and only referenced here. For a self-contained HAL, they can be static.
 static PCD_HandleTypeDef hpcd_USB_OTG_FS;
 static I2C_HandleTypeDef hi2c1;
 static SPI_HandleTypeDef hspi1;
 static OCTOSPI_HandleTypeDef hospi1;
-static GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-// USB HID report buffer
+// Global GPIO_InitStruct is problematic. Declare locally where used.
+// static GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+// USB HID report buffer and state (for internal use by usb_hid_send_report/poll_report)
 static uint8_t hid_report_buffer[64];
 static bool hid_report_pending = false;
 static uint8_t hid_report_id = 0;
 
-// Mass Storage variables
-static const uint8_t fat12_image[] = {
-    // FAT12 image data would go here
-    // This is a placeholder for the actual image data
-    0xEB, 0x3C, 0x90, 0x4D, 0x53, 0x44, 0x4F, 0x53, 0x35, 0x2E, 0x30, 0x00, 0x02, 0x08, 0x20, 0x00,
-    0x02, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x00, 0x3F, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
-    // ... rest of the FAT12 image data ...
-};
+// Mass Storage variables should be handled by usb_msc.c, not platform_hal.c
+// Any direct reference to fat12_image here is a placeholder/temp test data.
+// Removed fat12_image as it should not be here.
 
 // System Clock Configuration
 void SystemClock_Config(void) {
@@ -98,6 +97,9 @@ void SystemClock_Config(void) {
 
 // GPIO Initialization
 void MX_GPIO_Init(void) {
+    // LEDs on PA0 and PA1
+    GPIO_InitTypeDef GPIO_InitStruct = {0}; // Declare locally
+
     // LEDs on PA0 and PA1
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -712,7 +714,7 @@ HAL_StatusTypeDef HAL_PCD_EP_Transmit(PCD_HandleTypeDef *hpcd, uint8_t ep_addr, 
     (void)pbuf; // Suppress unused parameter warning
     (void)size; // Suppress unused parameter warning
 #if !FIRMWARE_PRODUCTION
-    // Example debug logging:
+    // Debug output for development builds
     // printf("USB EP Transmit: EP %d, %d bytes\n", ep_addr, size);
 #endif
     return HAL_OK;
@@ -722,16 +724,25 @@ HAL_StatusTypeDef HAL_PCD_EP_Transmit(PCD_HandleTypeDef *hpcd, uint8_t ep_addr, 
 void HAL_NVIC_SetPriority(IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority) {
     (void)IRQn; (void)PreemptPriority; (void)SubPriority; // Suppress unused parameter warnings
     // In a real system, this would configure the NVIC.
+#if !FIRMWARE_PRODUCTION
+    // printf("HAL_NVIC_SetPriority: IRQn %d, Prio %d, SubPrio %d\n", IRQn, PreemptPriority, SubPriority);
+#endif
 }
 
 void HAL_NVIC_EnableIRQ(IRQn_Type IRQn) {
     (void)IRQn; // Suppress unused parameter warning
     // In a real system, this would enable the interrupt in the NVIC.
+#if !FIRMWARE_PRODUCTION
+    // printf("HAL_NVIC_EnableIRQ: IRQn %d\n", IRQn);
+#endif
 }
 
 void HAL_NVIC_DisableIRQ(IRQn_Type IRQn) {
     (void)IRQn; // Suppress unused parameter warning
     // In a real system, this would disable the interrupt in the NVIC.
+#if !FIRMWARE_PRODUCTION
+    // printf("HAL_NVIC_DisableIRQ: IRQn %d\n", IRQn);
+#endif
 }
 
 // Dummy implementation for HAL_PWREx_ControlVoltageScaling
@@ -758,7 +769,6 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState Pin
     (void)GPIOx; (void)GPIO_Pin; (void)PinState; // Suppress unused parameter warnings
     // In a real system, this would write to the GPIO pin.
 #if !FIRMWARE_PRODUCTION
-    // Example debug logging:
     // printf("GPIO Write: Pin %d, State %d\n", GPIO_Pin, PinState);
 #endif
 }
@@ -831,11 +841,13 @@ void HAL_MspDeInit(void) {
 void assert_param(int condition) {
     if (!condition) {
         // In a real application, this would handle assertion failures.
-        // For this example, we'll just loop infinitely.
-#if !FIRMWARE_PRODUCTION
-        // Example debug logging:
-        // printf("Assertion failed!\n");
-#endif
+        // For production, a failed assertion is a critical error.
+#if FIRMWARE_PRODUCTION
+        Error_Handler(); // In production, call the main Error_Handler
+#else
+        // In debug, loop infinitely or print a message.
+        // printf("Assertion failed!\n"); // Can add debug print here if enabled
         while(1);
+#endif
     }
 }
