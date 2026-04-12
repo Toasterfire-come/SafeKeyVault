@@ -63,6 +63,7 @@ bool fido2_create_credential(const char *rp_id,
   // The `crypto_engine_generate_ec_keypair` function (ATECC mode) should handle this.
 
   // Use the public key or a hash of it as the credential ID
+  // Use the public key or a hash of it as the credential ID
   crypto_engine_hash256(credential_public_key, sizeof(credential_public_key), out_cred->id);
   out_cred->id_len = sizeof(out_cred->id); // 32 bytes for SHA-256 hash
   memcpy(out_cred->public_key, credential_public_key, sizeof(credential_public_key));

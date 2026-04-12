@@ -287,25 +287,27 @@ bool crypto_engine_encrypt_password(const char *plaintext,
   // Use ATECC608A for AEAD encryption
   success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Master key is in slot 0
                                  (const uint8_t *)plaintext, plaintext_len,
-                                 nonce, sizeof(nonce), // Nonce as AAD for now; ATECC should generate internal unique nonce
+                                 nonce, sizeof(nonce), // Nonce for AEAD is critical; ATECC should generate internally
                                  ciphertext, sizeof(ciphertext), &ciphertext_len, tag);
 #else
   if (!g_crypto_state.secure_element_bound) {
-      // Fallback to stub for development builds if ATECC is not bound or fails
-      // Fallback to stub for development builds if ATECC is not bound or fails
+      // Fallback to stub for development builds if ATECC is not bound or fails.
       // THIS IS NOT A SECURE IMPLEMENTATION FOR PRODUCTION.
       success = crypto_stub_encrypt_password(plaintext, (char*)ciphertext, sizeof(ciphertext));
       if (success) {
-          crypto_stub_hash16(ciphertext, ciphertext_len, tag); // Simulate tag
+          crypto_stub_hash16(ciphertext, strlen((char*)ciphertext), tag); // Simulate tag
           ciphertext_len = strlen((char*)ciphertext); // Stub returns null-terminated string
       } else {
-          Error_Handler(); // Placeholder: In production, this should not occur if stub is not used.
+            // In dev mode, if stub fails, ensure output is cleared
+            security_secure_zero(ciphertext, sizeof(ciphertext));
+            security_secure_zero(tag, sizeof(tag));
+            security_secure_zero(nonce, sizeof(nonce));
       }
   } else {
       // If ATECC is available in development, use it.
       success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY,
                                      (const uint8_t *)plaintext, plaintext_len,
-                                     nonce, sizeof(nonce),
+                                     nonce, sizeof(nonce), // Nonce for AEAD is critical
                                      ciphertext, sizeof(ciphertext), &ciphertext_len, tag);
   }
 #endif
