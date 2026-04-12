@@ -32,7 +32,7 @@ typedef struct {
 } crypto_engine_status_t;
 
 void crypto_engine_init(void);
-void crypto_engine_set_master_key(const uint8_t *key, size_t key_len);
+void crypto_engine_set_master_key_slot_ready(void); // Indicates master key is ready in ATECC slot
 bool crypto_engine_set_device_secret(const uint8_t *secret, size_t secret_len);
 bool crypto_engine_bind_atecc_slot(uint8_t slot_id,
                                    const uint8_t *public_key,
@@ -95,7 +95,7 @@ bool crypto_engine_write_atecc_slot(uint8_t slot_id, const uint8_t *data, size_t
  * @param private_key_len Size of the private_key buffer.
  * @return true if key pair generation was successful, false otherwise.
  */
-bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_len, uint8_t *private_key, size_t private_key_len);
+bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_len); // Private key argument removed
 
 /**
  * @brief Signs a message using an ECDSA private key.
@@ -108,7 +108,9 @@ bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_le
  * @param signature_len Size of the signature buffer.
  * @return true if signing was successful, false otherwise.
  */
-bool crypto_engine_ecdsa_sign(const uint8_t *private_key, size_t private_key_len, const uint8_t *message, size_t message_len, uint8_t *signature, size_t signature_len);
+bool crypto_engine_ecdsa_sign(const uint8_t key_slot_id, // Changed to key_slot_id
+                              const uint8_t *message, size_t message_len,
+                              uint8_t *signature, size_t signature_len);
 
 /**
  * @brief Computes the SHA-256 hash of the given data.

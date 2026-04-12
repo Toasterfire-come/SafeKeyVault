@@ -132,6 +132,18 @@ void secure_boot_init(void) {
   // Initialize hardware drivers
   spi_hal_init();
   atecc608a_init();
+
+  // Read the current stored anti-rollback version from ATECC slot 7 immediately upon init.
+  // This value determines the minimum allowed version for any new firmware.
+  uint32_t stored_version_on_init = 0;
+  if (!read_version_from_atecc(&stored_version_on_init)) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Secure Boot: Failed to read initial version counter from ATECC. Assuming 0.\n");
+#endif
+      stored_version_on_init = 0; // If read fails, assume 0 for safety but this indicates a problem
+  }
+  g_secure_boot.current_version = stored_version_on_init;
 }
 
 void secure_boot_set_policy(const secure_boot_policy_t *policy) {
@@ -191,35 +203,37 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   }
 
   // 1. Verify Firmware Signature
+  // 1. Verify Firmware Signature
   if (g_secure_boot.policy.enforce_signature) {
     if (!g_secure_boot.signing_key_set) {
-      // Signing public key not set, cannot verify signature
+      // Signing public key not set, cannot verify signature. This is a critical failure.
       out_result->signature_valid = false;
 #if !FIRMWARE_PRODUCTION
       // Example debug logging:
-      // printf("Secure Boot: Signature verification failed - signing key not set.\n");
+      // printf("Secure Boot: Signature verification failed - signing key not set. Rejecting.\n");
 #endif
-    } else {
-      // Read signature from the last flash sector
-      if (read_firmware_signature(firmware_signature)) {
-        // Verify signature using ECDSA P-256 via crypto engine
-        if (crypto_engine_ecdsa_verify(g_secure_boot.signing_pubkey,
-                                       g_secure_boot.signing_pubkey_len,
-                                       payload_hash,
-                                       payload_hash_len,
-                                       firmware_signature,
-                                       ECDSA_P256_SIGNATURE_LEN)) {
-          signature_ok = true;
-        }
-      }
-      out_result->signature_valid = signature_ok;
-#if !FIRMWARE_PRODUCTION
-      if (!signature_ok) {
-          // Example debug logging:
-          // printf("Secure Boot: Signature verification failed.\n");
-      }
-#endif
+      overall_success = false; // Set overall failure
+      goto end; // Immediately exit as signing key is crucial
     }
+    // Read signature from the last flash sector
+    if (read_firmware_signature(firmware_signature)) {
+      // Verify signature using ECDSA P-256 via crypto engine
+      if (crypto_engine_ecdsa_verify(g_secure_boot.signing_pubkey,
+                                     g_secure_boot.signing_pubkey_len,
+                                     payload_hash,
+                                     payload_hash_len,
+                                     firmware_signature,
+                                     ECDSA_P256_SIGNATURE_LEN)) {
+        signature_ok = true;
+      }
+    }
+    out_result->signature_valid = signature_ok;
+#if !FIRMWARE_PRODUCTION
+    if (!signature_ok) {
+        // Example debug logging:
+        // printf("Secure Boot: Signature verification failed.\n");
+    }
+#endif
   } else {
     out_result->signature_valid = true; // Signature enforcement is disabled
   }
@@ -228,29 +242,47 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   if (g_secure_boot.policy.enforce_antirollback) {
     // Read the stored version from ATECC608A slot 7
     if (read_version_from_atecc(&stored_version)) {
-        // Check if the manifest version is greater than or equal to the stored version
-        if (manifest->version >= stored_version) {
-            rollback_ok = true;
+        // Check if the manifest version is strictly greater than the stored version,
+        // or equal if the stored version matches the currently running version (re-flash same version).
+        // A downgrade (manifest lower than stored) is always rejected.
+        if (manifest->version < stored_version) {
+            rollback_ok = false; // Downgrade detected, immediately reject
+        } else if (manifest->version == stored_version) {
+            // Allow re-flashing the same version if it's the currently running version.
+            if (manifest->version == g_secure_boot.current_version) {
+                rollback_ok = true;
+            } else {
+                // If it's the same version as stored, but not the current running, it's not a true "rollback"
+                // but might imply trying to write an older version than originally provisioned.
+                // For simplicity, let's allow if equal to stored, but a more complex policy could reject.
+                // The main goal is manifest < stored is rejected.
+                 rollback_ok = true;
+            }
+        } else { // manifest->version > stored_version
+            rollback_ok = true; // Upgrade is allowed
         }
+
     } else {
-        // If version cannot be read from ATECC for the first time, assume it's okay
-        // if the manifest version meets the minimum policy.
-        // This handles initial provisioning where ATECC might not have a version yet.
-        if (g_secure_boot.policy.min_allowed_version == 0 && manifest->version >= 0) { // No min_allowed_version specified, allow
-             rollback_ok = true;
-        } else if (manifest->version >= g_secure_boot.policy.min_allowed_version) {
-            rollback_ok = true;
-        }
+        // If version cannot be read from ATECC (e.g., first boot or corrupted slot),
+        // we must not allow an unknown state. Better to fail securely than proceed.
+        // For initial provisioning, `secure_boot_set_current_version` should be called.
+        // If ATECC is enforcing anti-rollback, it means it *should* have a version.
+        // If it cannot be read, it's a security-critical failure.
+        rollback_ok = false;
+#if !FIRMWARE_PRODUCTION
+        // Example debug logging:
+        // printf("Secure Boot: CRITICAL - Failed to read version from ATECC for anti-rollback. Rejecting.\n");
+#endif
     }
     out_result->antirollback_ok = rollback_ok;
 #if !FIRMWARE_PRODUCTION
     if (!rollback_ok) {
         // Example debug logging:
-        // printf("Secure Boot: Anti-rollback check failed (Manifest version: %u, Stored version: %u).\n", manifest->version, stored_version);
+        // printf("Secure Boot: Anti-rollback check failed (Manifest version: %u, Stored version: %u (from ATECC)).\n", manifest->version, stored_version);
     }
 #endif
   } else {
-    out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled
+    out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled, so a "rollback" is allowed
   }
 
   // 3. Final Acceptance

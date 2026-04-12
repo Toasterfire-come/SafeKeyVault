@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct {
   bool enforce_signature;
-  bool enforce_antiroolback;
+  bool enforce_antirollback;
   uint32_t min_allowed_version;
 } secure_boot_policy_t;
 
