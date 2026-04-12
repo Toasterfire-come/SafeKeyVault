@@ -19,6 +19,8 @@ static runtime_settings_t g_settings = {
     .require_touch_for_fill = true,
     .hold_required_for_selection = true,
     .autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT,
+    .pin_attempt_limit = 5, // Default value, will be overridden by loaded settings
+    .wipe_on_lockout = false, // Default value
 };
 static uint8_t g_pin_verifier[16];
 static bool g_pin_verifier_set = false;
@@ -123,12 +125,22 @@ void state_machine_on_touch_hold(device_context_t *ctx) {
 bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
     bool all_digits = true;
     size_t pin_len = 0u;
+    uint8_t candidate[16] = {0};
+    bool success = false;
 
     if (ctx == NULL || pin == NULL || ctx->wiped) {
+        security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
         return false;
     }
 
     if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
+        security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
+        return false;
+    }
+
+    // PIN verifier must be set. If not, we cannot proceed.
+    if (!g_pin_verifier_set) {
+        security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
         return false;
     }
 
@@ -139,46 +151,35 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         }
     }
 
-    if (!g_pin_verifier_set) {
-        // In production, the PIN verifier must be securely provisioned.
-        // This default is only for initial development/testing and should be replaced.
-        // A secure provisioning mechanism should set the verifier.
-        // For now, we'll assume it's set externally or via a secure provisioning step.
-        // If it's truly unset, we cannot proceed with unlock.
-        return false;
-    }
+    crypto_engine_hash16((const uint8_t *)pin, pin_len, candidate);
 
-    {
-        uint8_t candidate[16] = {0};
-        crypto_engine_hash16((const uint8_t *)pin, pin_len, candidate);
-        if (pin_len == PIN_DIGITS && all_digits &&
-            sec_consttime_memeq(candidate, g_pin_verifier, sizeof(candidate))) {
-            ctx->failed_pin_attempts = 0u;
+    if (pin_len == PIN_DIGITS && all_digits &&
+        sec_consttime_memeq(candidate, g_pin_verifier, sizeof(candidate))) {
+        
+        ctx->failed_pin_attempts = 0u;
+        ctx->lockout_ticks_remaining = 0u;
+        ctx->unlocked = true;
+        ctx->state = DEVICE_UNLOCKED;
+        ctx->inactivity_seconds = 0u;
+        success = true;
+    } else {
+        ctx->failed_pin_attempts++;
+        reset_unlock_session(ctx);
+
+        if (g_settings.wipe_on_lockout && ctx->failed_pin_attempts >= g_settings.pin_attempt_limit) {
+            ctx->wiped = true;
+            ctx->state = DEVICE_LOCKED_OUT;
             ctx->lockout_ticks_remaining = 0u;
-            ctx->unlocked = true;
-            ctx->state = DEVICE_UNLOCKED;
-            ctx->inactivity_seconds = 0u;
-            security_secure_zero(candidate, sizeof(candidate)); // Zeroize PIN buffer
-            return true;
+        } else if (ctx->failed_pin_attempts >= g_settings.pin_attempt_limit) {
+            // Calculate lockout duration based on attempts beyond the initial limit
+            unsigned int lockout_attempts_exceeded = ctx->failed_pin_attempts - g_settings.pin_attempt_limit;
+            ctx->state = DEVICE_LOCKED_OUT;
+            ctx->lockout_ticks_remaining = LOCKOUT_TICKS_BASE + (lockout_attempts_exceeded * LOCKOUT_TICKS_STEP);
         }
     }
 
-    ctx->failed_pin_attempts++;
-    reset_unlock_session(ctx);
-
-    if (ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_WIPE) {
-        ctx->wiped = true;
-        ctx->state = DEVICE_LOCKED_OUT;
-        ctx->lockout_ticks_remaining = 0u;
-        return false;
-    }
-
-    if (ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_LOCKOUT) {
-        unsigned int overflow = ctx->failed_pin_attempts - MAX_PIN_FAILURES_BEFORE_LOCKOUT;
-        ctx->state = DEVICE_LOCKED_OUT;
-        ctx->lockout_ticks_remaining = LOCKOUT_TICKS_BASE + (overflow * LOCKOUT_TICKS_STEP);
-    }
-    return false;
+    security_secure_zero(candidate, sizeof(candidate)); // Zeroize PIN buffer
+    return success;
 }
 
 bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const char *new_pin) {
@@ -188,38 +189,55 @@ bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const cha
     bool new_digits = true;
     uint8_t old_hash[16] = {0};
     uint8_t new_hash[16] = {0};
+    bool success = false;
 
     if (ctx == NULL || old_pin == NULL || new_pin == NULL || !ctx->unlocked || ctx->wiped) {
+        security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
+        security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
         return false;
     }
+
     for (old_len = 0u; old_pin[old_len] != '\0'; ++old_len) {
         if (old_pin[old_len] < '0' || old_pin[old_len] > '9') {
             old_digits = false;
+            break;
         }
     }
     for (new_len = 0u; new_pin[new_len] != '\0'; ++new_len) {
         if (new_pin[new_len] < '0' || new_pin[new_len] > '9') {
             new_digits = false;
+            break;
         }
     }
+
     if (old_len != PIN_DIGITS || new_len != PIN_DIGITS || !old_digits || !new_digits) {
+        security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
+        security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
         return false;
     }
+
+    // PIN verifier must be set. If not, we cannot proceed.
     if (!g_pin_verifier_set) {
-        // PIN verifier must be set before changing PIN.
+        security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
+        security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
         return false;
     }
+
     crypto_engine_hash16((const uint8_t *)old_pin, old_len, old_hash);
     if (!sec_consttime_memeq(old_hash, g_pin_verifier, sizeof(old_hash))) {
         security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
+        security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
         return false;
     }
+
     crypto_engine_hash16((const uint8_t *)new_pin, new_len, new_hash);
     // Update the verifier securely
     state_machine_set_pin_verifier(new_hash);
+    success = true;
+
     security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
     security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
-    return true;
+    return success;
 }
 
 bool state_machine_request_fill(device_context_t *ctx,
@@ -231,7 +249,7 @@ bool state_machine_request_fill(device_context_t *ctx,
     char username_copy[MAX_USERNAME_LEN] = {0};
     char password_copy[MAX_PASSWORD_LEN] = {0};
     char origin_copy[MAX_ORIGIN_LEN] = {0};
-
+    bool success = false;
 
     if (ctx == NULL || record == NULL || origin == NULL) {
         return false;
@@ -273,12 +291,13 @@ bool state_machine_request_fill(device_context_t *ctx,
     } else {
         ctx->state = DEVICE_CONFIRM_TYPE;
     }
+    success = true;
 
     // Zeroize copied buffers after use
     security_secure_zero(username_copy, sizeof(username_copy));
     security_secure_zero(password_copy, sizeof(password_copy));
     security_secure_zero(origin_copy, sizeof(origin_copy));
-    return true;
+    return success;
 }
 
 bool state_machine_request_save(device_context_t *ctx, const credential_record_t *record) {
@@ -288,8 +307,12 @@ bool state_machine_request_save(device_context_t *ctx, const credential_record_t
     char username_copy[MAX_USERNAME_LEN] = {0};
     char password_copy[MAX_PASSWORD_LEN] = {0};
     char origin_copy[MAX_ORIGIN_LEN] = {0};
+    bool success = false;
 
     if (ctx == NULL || record == NULL || !ctx->unlocked || ctx->wiped || ctx->state == DEVICE_LOCKED_OUT) {
+        security_secure_zero(username_copy, sizeof(username_copy));
+        security_secure_zero(password_copy, sizeof(password_copy));
+        security_secure_zero(origin_copy, sizeof(origin_copy));
         return false;
     }
 
@@ -321,12 +344,13 @@ bool state_machine_request_save(device_context_t *ctx, const credential_record_t
 
     ctx->state = DEVICE_PROMPT_SAVE;
     ctx->inactivity_seconds = 0u;
+    success = true;
 
     // Zeroize copied buffers after use
     security_secure_zero(username_copy, sizeof(username_copy));
     security_secure_zero(password_copy, sizeof(password_copy));
     security_secure_zero(origin_copy, sizeof(origin_copy));
-    return true;
+    return success;
 }
 
 bool state_machine_is_wiped(const device_context_t *ctx) {
@@ -348,6 +372,10 @@ void state_machine_apply_settings(const runtime_settings_t *settings) {
     if (g_settings.autolock_seconds == 0u) {
         g_settings.autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT;
     }
+    // Ensure pin_attempt_limit is within a reasonable range if not set by settings
+    if (g_settings.pin_attempt_limit == 0) {
+        g_settings.pin_attempt_limit = 5; // Default to 5 if 0 is provided
+    }
 }
 
 void state_machine_get_settings(runtime_settings_t *out_settings) {
@@ -359,6 +387,9 @@ void state_machine_get_settings(runtime_settings_t *out_settings) {
 
 void state_machine_set_pin_verifier(const uint8_t verifier[16]) {
     if (verifier == NULL) {
+        // If verifier is NULL, clear the existing one
+        memset(g_pin_verifier, 0, sizeof(g_pin_verifier));
+        g_pin_verifier_set = false;
         return;
     }
     memcpy(g_pin_verifier, verifier, 16u);
