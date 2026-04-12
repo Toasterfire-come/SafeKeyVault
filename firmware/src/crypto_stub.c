@@ -99,3 +99,54 @@ void crypto_stub_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]
     out_fp[i % 16u] ^= (uint8_t)(h & 0xFFu);
   }
 }
+
+void crypto_stub_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]) {
+  // Simple stub for SHA-256: FNV-1a type hash, repeated to fill 32 bytes
+  uint32_t h = 2166136261u; // FNV-1a initial hash value
+  size_t i;
+  if (out_hash == NULL) {
+    return;
+  }
+  memset(out_hash, 0, 32u); // Zero out the output buffer
+  if (data == NULL) {
+    return; // No data, return zeroed buffer
+  }
+  for (i = 0u; i < data_len; ++i) {
+    h ^= data[i];
+    h *= 16777619u; // FNV-1a prime
+    // Fill the 32-byte output hash by repeating and mixing the 32-bit FNV-1a hash
+    out_hash[i % 32u] ^= (uint8_t)((h >> ((i % 4) * 8)) & 0xFFu);
+  }
+}
+
+bool crypto_stub_generate_ec_keypair(uint8_t *public_key, size_t public_key_len, uint8_t *private_key, size_t private_key_len) {
+  if (public_key == NULL || private_key == NULL || public_key_len < 64 || private_key_len < 32) {
+    return false;
+  }
+  // Simulate key generation for P-256
+  // Private key (32 bytes random)
+  // Public key (64 bytes, x and y coordinates)
+  // For stub, just fill with some non-zero data
+  for (size_t i = 0; i < 32; ++i) {
+    private_key[i] = (uint8_t)(0xDE + i);
+  }
+  for (size_t i = 0; i < 64; ++i) {
+    public_key[i] = (uint8_t)(0xAD + i);
+  }
+  return true;
+}
+
+bool crypto_stub_ecdsa_sign(const uint8_t *private_key, size_t private_key_len, const uint8_t *message, size_t message_len, uint8_t *signature, size_t signature_len) {
+  if (private_key == NULL || message == NULL || signature == NULL || private_key_len < 32 || signature_len < 64) {
+    return false;
+  }
+  // Simulate signing by hashing the message and filling the signature with it
+  uint8_t hash_of_message[32];
+  crypto_stub_hash256(message, message_len, hash_of_message);
+
+  // Use the hash as a dummy signature (first 32 bytes as R, second 32 as S)
+  memcpy(signature, hash_of_message, 32);
+  memcpy(signature + 32, hash_of_message, 32); // Repeat to fill 64 bytes
+  security_secure_zero(hash_of_message, sizeof(hash_of_message));
+  return true;
+}

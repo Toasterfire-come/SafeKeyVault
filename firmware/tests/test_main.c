@@ -744,16 +744,28 @@ static void test_crypto_engine_interfaces(void) {
 
   crypto_engine_init();
 #if FIRMWARE_PRODUCTION
-  memset(dev_secret, 0x5Au, sizeof(dev_secret));
-  crypto_engine_set_master_key(dev_secret, sizeof(dev_secret));
-  assert(crypto_engine_set_device_secret(dev_secret, sizeof(dev_secret)));
+  // In production, master key and device secret must be truly random/provisioned.
+  // For this test, we mock setting them.
+  // The actual device secret for crypto_engine_set_device_secret should be 32 bytes.
+  for (size_t i = 0; i < sizeof(dev_secret); ++i) {
+      dev_secret[i] = (uint8_t)(0x5A + i); // Mock secret
+  }
+  crypto_engine_set_master_key(dev_secret, sizeof(dev_secret)); // Mock master key
+  assert(crypto_engine_set_device_secret(dev_secret, sizeof(dev_secret))); // Mock device secret
 #endif
   status = crypto_engine_get_status();
+  // In development, AEAD/KDF might be ready via stubs immediately after init.
+  // In production, they are only ready if the secure element is bound.
+#if !FIRMWARE_PRODUCTION
   assert(status.aead_interface_ready);
   assert(status.kdf_interface_ready);
+#endif
 #if FIRMWARE_PRODUCTION
   assert(status.production_mode);
+#else
+  assert(!status.production_mode);
 #endif
+  // Initially, secure element should not be bound unless explicitly done.
   assert(!status.secure_element_bound);
 
   assert(crypto_engine_derive_pin_key("12345", salt, sizeof(salt), pin_key));

@@ -424,14 +424,54 @@ bool crypto_engine_ecdsa_verify(const uint8_t *public_key,
                                 size_t signature_len) {
   if (g_crypto_state.secure_element_bound) {
     // Use ATECC608A for ECDSA verification
-    return atecc608a_ecdsa_verify(ATECC608A_SLOT_PUBKEY, // Assuming public key is in slot 2
-                                  public_key, public_key_len, // Pass public key if not slot-bound
+    // ATECC608A usually verifies against a stored public key or one provided.
+    // ATECC608A_SLOT_PUBKEY is a placeholder and should be derived from context.
+    // `public_key` and `public_key_len` should be passed to ATECC driver.
+    return atecc608a_ecdsa_verify(ATECC608A_SLOT_PUBKEY,
+                                  public_key, public_key_len,
                                   message_hash, message_hash_len,
                                   signature, signature_len) == ATECC608A_SUCCESS;
   } else {
-    // Fallback to software implementation or return false if not supported
-    // For now, return false as software ECDSA is not implemented here.
-    return false;
+    // Fallback to stub for testing/development
+    // In production, this path needs a robust software ECDSA library or should be unreachable.
+    return crypto_stub_ecdsa_verify(public_key, public_key_len, message_hash, message_hash_len, signature, signature_len);
+  }
+}
+
+bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_len, uint8_t *private_key, size_t private_key_len) {
+  if (g_crypto_state.secure_element_bound) {
+    // Delegate to ATECC608A to generate a key pair and store it securely
+    // ATECC typically stores private keys internally and provides the public key
+    // For now, this is a placeholder. Real implementation needs specific ATECC commands.
+    return atecc608a_generate_ec_keypair(public_key, public_key_len, private_key, private_key_len) == ATECC608A_SUCCESS;
+  } else {
+    // Fallback to stub for testing/development
+    return crypto_stub_generate_ec_keypair(public_key, public_key_len, private_key, private_key_len);
+  }
+}
+
+bool crypto_engine_ecdsa_sign(const uint8_t *private_key, size_t private_key_len,
+                              const uint8_t *message, size_t message_len,
+                              uint8_t *signature, size_t signature_len) {
+  if (g_crypto_state.secure_element_bound) {
+    // Delegate to ATECC608A for actual signing.
+    // ATECC608A signing usually involves a key slot ID directly.
+    // We would need to manage which slot the private_key corresponds to.
+    return atecc608a_ecdsa_sign(ATECC608A_SLOT_CRED_PRIVKEY, private_key, private_key_len, message, message_len, signature, signature_len) == ATECC608A_SUCCESS;
+  } else {
+    // Fallback to stub for testing/development
+    return crypto_stub_ecdsa_sign(private_key, private_key_len, message, message_len, signature, signature_len);
+  }
+}
+
+void crypto_engine_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]) {
+  if (g_crypto_state.secure_element_bound) {
+    // Use ATECC608A for SHA-256 hashing if available and more efficient
+    // atecc608a_sha256(data, data_len, out_hash); // Assuming such a function exists
+    // For now, fall back to stub to ensure consistent behavior if ATECC SHA is not active
+    crypto_stub_hash256(data, data_len, out_hash);
+  } else {
+    crypto_stub_hash256(data, data_len, out_hash);
   }
 }
 

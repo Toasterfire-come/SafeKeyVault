@@ -11,5 +11,8 @@ bool crypto_stub_encrypt_password(const char *plaintext, char *ciphertext_out, s
 bool crypto_stub_decrypt_password(const char *ciphertext, char *plaintext_out, size_t out_len);
 void crypto_stub_password_fingerprint(const char *password, uint8_t out_fp[16], size_t out_len);
 void crypto_stub_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]);
+void crypto_stub_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]);
+bool crypto_stub_generate_ec_keypair(uint8_t *public_key, size_t public_key_len, uint8_t *private_key, size_t private_key_len);
+bool crypto_stub_ecdsa_sign(const uint8_t *private_key, size_t private_key_len, const uint8_t *message, size_t message_len, uint8_t *signature, size_t signature_len);
 
 #endif /* CRYPTO_STUB_H */

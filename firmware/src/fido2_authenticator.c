@@ -31,34 +31,59 @@ bool fido2_create_credential(const char *rp_id,
                              const uint8_t *client_data_hash,
                              size_t hash_len,
                              fido2_credential_t *out_cred) {
-  uint8_t seed[64];
+  uint8_t credential_private_key[32] = {0}; // Private key for this credential
+  uint8_t credential_public_key[64] = {0}; // Public key for this credential
+  uint8_t rp_hash_local[32] = {0}; // Local hash for rp_id
+  uint8_t user_hash_local[32] = {0}; // Local hash for user_name
+  bool success = false;
+
   if (!g_fido2.initialized) {
     fido2_authenticator_init();
   }
-  if (rp_id == NULL || user_name == NULL || client_data_hash == NULL || out_cred == NULL) {
-    return false;
+  if (rp_id == NULL || user_name == NULL || client_data_hash == NULL || out_cred == NULL || hash_len == 0 || hash_len > 32) {
+    goto end;
   }
-  memset(seed, 0, sizeof(seed));
   memset(out_cred, 0, sizeof(*out_cred));
 
-  crypto_engine_hash16((const uint8_t *)rp_id, strlen(rp_id), g_fido2.rp_hash);
-  crypto_engine_hash16((const uint8_t *)user_name, strlen(user_name), g_fido2.user_hash);
-  memcpy(seed, g_fido2.rp_hash, sizeof(g_fido2.rp_hash));
-  memcpy(seed + 16u, g_fido2.user_hash, sizeof(g_fido2.user_hash));
-  if (hash_len > 16u) {
-    hash_len = 16u;
-  }
-  memcpy(seed + 32u, client_data_hash, hash_len);
-  crypto_engine_hash16(seed, sizeof(seed), out_cred->id);
-  out_cred->id_len = 16u;
-  crypto_engine_hash16(out_cred->id, out_cred->id_len, out_cred->public_key);
-  out_cred->public_key_len = 16u;
+  // Compute hashes for Relying Party ID and User Name (SHA-256 for FIDO2)
+  crypto_engine_hash256((const uint8_t *)rp_id, strnlen(rp_id, 256), rp_hash_local);
+  crypto_engine_hash256((const uint8_t *)user_name, strnlen(user_name, 256), user_hash_local);
 
+  // Store RP and User hashes in global state
+  memcpy(g_fido2.rp_hash, rp_hash_local, sizeof(g_fido2.rp_hash));
+  memcpy(g_fido2.user_hash, user_hash_local, sizeof(g_fido2.user_hash));
+
+  // Generate a new EC key pair for this credential
+  // For production builds, this operation must leverage the secure element
+  if (!crypto_engine_generate_ec_keypair(credential_public_key, sizeof(credential_public_key),
+                                         credential_private_key, sizeof(credential_private_key))) {
+    goto end;
+  }
+  // (Optional: store `credential_private_key` securely in ATECC if not generated directly there,
+  // or store a reference/handle to it)
+  // For this example, we assume `crypto_engine_generate_ec_keypair` handles secure storage
+  // or that the private key is ephemeral/handled by the ATECC internally.
+
+  // Use the public key or a hash of it as the credential ID
+  crypto_engine_hash256(credential_public_key, sizeof(credential_public_key), out_cred->id);
+  out_cred->id_len = sizeof(out_cred->id); // 32 bytes for SHA-256 hash
+  memcpy(out_cred->public_key, credential_public_key, sizeof(credential_public_key));
+  out_cred->public_key_len = sizeof(credential_public_key);
+
+  // Store new credential ID and associated state
   memcpy(g_fido2.cred_id, out_cred->id, out_cred->id_len);
   g_fido2.cred_id_len = out_cred->id_len;
   g_fido2.has_credential = true;
-  g_fido2.sign_counter = 0u;
-  return true;
+  g_fido2.sign_counter = 0u; // Reset sign counter for new credential
+  success = true;
+
+end:
+  // Securely zeroize sensitive intermediate buffers, including private key material
+  security_secure_zero(credential_private_key, sizeof(credential_private_key));
+  security_secure_zero(credential_public_key, sizeof(credential_public_key));
+  security_secure_zero(rp_hash_local, sizeof(rp_hash_local));
+  security_secure_zero(user_hash_local, sizeof(user_hash_local));
+  return success;
 }
 
 bool fido2_get_assertion(const char *rp_id,
