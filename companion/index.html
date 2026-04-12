@@ -1007,6 +1007,18 @@
         let totpInterval;
         let reconnectAttempts = 0;
 
+        // Allowed applications and URLs
+        const allowedApps = [
+            'chrome.exe', 'firefox.exe', 'msedge.exe', 'opera.exe', 'brave.exe',
+            'safari.app', 'google chrome.app', 'firefox.app', 'microsoft edge.app',
+            'google-chrome', 'firefox', 'chromium', 'chromium-browser',
+            'google-chrome-stable', 'google-chrome-beta', 'google-chrome-dev',
+            'google-chrome-unstable', 'microsoft-edge', 'microsoft-edge-dev',
+            'microsoft-edge-beta', 'microsoft-edge-canary',
+            'org.mozilla.firefox', 'com.google.Chrome', 'com.microsoft.edge',
+            'com.opera.browser', 'com.brave.browser'
+        ];
+
         // DOM elements
         const views = {
             connect: document.getElementById('connect-view'),
@@ -2420,6 +2432,30 @@
                 setTimeout(attemptReconnect, 2000);
             });
         }
+
+        // Check for allowed applications and URLs
+        function checkAllowedAppsAndUrls() {
+            // This function would be called when the device is in a state to check for allowed apps/URLs
+            // For now, we'll just simulate checking for an allowed app/URL
+            // In a real implementation, this would involve checking the active window/application
+
+            // Simulate finding a matching credential
+            const matchedCredential = credentials.find(cred => cred.origin === 'https://example.com');
+
+            if (matchedCredential) {
+                // Send command to input the password
+                sendReport(0x0A, new Uint8Array([credentials.indexOf(matchedCredential), 0x02])); // 0x02 means password
+            } else {
+                // No match found, show password input screen
+                showModal('addCredential');
+            }
+        }
+
+        // Add event listener for the TOTP button
+        document.getElementById('add-first-totp').addEventListener('click', function() {
+            // When the TOTP button is clicked, check for allowed apps/URLs
+            checkAllowedAppsAndUrls();
+        });
     </script>
 </body>
 </html>
