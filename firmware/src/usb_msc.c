@@ -4,18 +4,28 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "companion_html.h"
-#include "stm32u5xx_hal.h"
+#include "companion_html.h" // For k_companion_html (the virtual disk content)
+#include "stm32u5xx_hal.h"   // For HAL_StatusTypeDef, LOBYTE, HIBYTE, etc.
+#include "pcd_hal.h"         // For pcd_hal_is_connected and potentially lower-level USB ops
 
-// CBW and CSW structures
+// Helper macros for extracting bytes from words (from STM32 HAL typically)
+#ifndef LOBYTE
+#define LOBYTE(x)  ((uint8_t)(x & 0x00FFU))
+#endif
+#ifndef HIBYTE
+#define HIBYTE(x)  ((uint8_t)((x & 0xFF00U) >> 8U))
+#endif
+
+// Command Block Wrapper (CBW) and Command Status Wrapper (CSW) structures
+// Defined by the USB Mass Storage Class Bulk-Only Transport (BOT) Specification.
 typedef struct {
-    uint32_t dSignature;
-    uint32_t dTag;
-    uint32_t dDataLength;
-    uint8_t bmFlags;
-    uint8_t bLUN;
-    uint8_t bCBLength;
-    uint8_t CB[16];
+    uint32_t dSignature;    // Signature (0x43425355 for CBW)
+    uint32_t dTag;          // Command Tag
+    uint32_t dDataLength;   // Number of bytes of data that the host expects to transfer
+    uint8_t bmFlags;        // Data transfer direction (bit 7: 0=OUT, 1=IN)
+    uint8_t bLUN;           // Logical Unit Number
+    uint8_t bCBLength;      // Length of the CBWCB (Command Block)
+    uint8_t CB[16];         // Command Block (e.g., SCSI command packet)
 } CBW_t;
 
 typedef struct {

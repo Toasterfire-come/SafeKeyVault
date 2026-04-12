@@ -13,9 +13,12 @@
 #include "atecc608a_driver.h" // Actual ATECC608A driver
 
 // Define ATECC608A slots
-#define ATECC608A_SLOT_MASTER_KEY 0u
-#define ATECC608A_SLOT_DEVICE_SECRET 1u
-#define ATECC608A_SLOT_PUBKEY 2u // Example slot for public key
+#define ATECC608A_SLOT_MASTER_KEY       0u // Example: Master encryption key
+#define ATECC608A_SLOT_DEVICE_SECRET    1u // Example: Device-unique secret
+#define ATECC608A_SLOT_PUBKEY           2u // Example: Public key for device attestation
+#define ATECC608A_SLOT_FIDO_PRIVKEY     3u // Example: Private key for FIDO2 credentials
+#define ATECC608A_SLOT_DATA_AES         4u // Example: AES key for general data encryption
+// Add more slot definitions as needed for specific security functions
 
 typedef struct {
   bool initialized;
@@ -456,8 +459,10 @@ bool crypto_engine_ecdsa_sign(const uint8_t *private_key, size_t private_key_len
   if (g_crypto_state.secure_element_bound) {
     // Delegate to ATECC608A for actual signing.
     // ATECC608A signing usually involves a key slot ID directly.
-    // We would need to manage which slot the private_key corresponds to.
-    return atecc608a_ecdsa_sign(ATECC608A_SLOT_CRED_PRIVKEY, private_key, private_key_len, message, message_len, signature, signature_len) == ATECC608A_SUCCESS;
+    // The `private_key` parameter here might represent a reference or handle to the key
+    // within the secure element, rather than the raw private key material itself.
+    // The ATECC driver needs to interpret this correctly.
+    return atecc608a_ecdsa_sign(ATECC608A_SLOT_FIDO_PRIVKEY, private_key, private_key_len, message, message_len, signature, signature_len) == ATECC608A_SUCCESS;
   } else {
     // Fallback to stub for testing/development
     return crypto_stub_ecdsa_sign(private_key, private_key_len, message, message_len, signature, signature_len);
