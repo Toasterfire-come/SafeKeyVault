@@ -286,17 +286,19 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   }
 
   // 3. Final Acceptance
+  // Only accept if both signature and anti-rollback checks pass
   out_result->accepted = out_result->signature_valid && out_result->antirollback_ok;
 
   // If the new firmware is accepted AND anti-rollback is enforced, update the version counter in ATECC
   if (out_result->accepted && g_secure_boot.policy.enforce_antirollback) {
       if (!write_version_to_atecc(manifest->version)) {
           // Failed to update version counter. This is a critical error.
-          // The device might enter a locked state or require manual intervention.
+          // If we can't update ATECC, the integrity of future updates is compromised.
+          // The device might enter a locked state or require manual intervention to recover.
           out_result->accepted = false; // Reject if version update fails
 #if !FIRMWARE_PRODUCTION
           // Example debug logging:
-          // printf("Secure Boot: CRITICAL - Failed to update version counter after acceptance.\n");
+          // printf("Secure Boot: CRITICAL - Failed to update version counter in ATECC after acceptance. Rejecting.\n");
 #endif
       }
   }
