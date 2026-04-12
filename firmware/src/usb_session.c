@@ -23,6 +23,261 @@ static uint32_t g_expected_client_counter;
 static uint8_t g_challenge[16];
 static size_t g_challenge_len;
 
+// USB Descriptor Definitions
+static const uint8_t usb_device_descriptor[] = {
+    0x12,                       // bLength
+    USB_DESC_TYPE_DEVICE,       // bDescriptorType
+    0x00, 0x02,                 // bcdUSB (USB 2.0)
+    USB_HID_CLASS_CODE,         // bDeviceClass (HID)
+    0x00,                       // bDeviceSubClass
+    0x00,                       // bDeviceProtocol
+    0x40,                       // bMaxPacketSize0 (64 bytes)
+    0x0483,                     // idVendor (STMicroelectronics)
+    0x5740,                     // idProduct (Custom product ID)
+    0x0200,                     // bcdDevice (2.00)
+    0x01,                       // iManufacturer (String Index 1)
+    0x02,                       // iProduct (String Index 2)
+    0x03,                       // iSerialNumber (String Index 3)
+    0x01                        // bNumConfigurations (1)
+};
+
+static const uint8_t usb_configuration_descriptor[] = {
+    // Configuration Descriptor
+    0x09,                       // bLength
+    USB_DESC_TYPE_CONFIGURATION,// bDescriptorType
+    0x43, 0x00,                 // wTotalLength (67 bytes)
+    0x03,                       // bNumInterfaces (3)
+    0x01,                       // bConfigurationValue
+    0x00,                       // iConfiguration (String Index 0)
+    0xC0,                       // bmAttributes (Self-powered)
+    0x32,                       // bMaxPower (100mA)
+
+    // Interface Association Descriptor (IAD) for HID Keyboard
+    0x08,                       // bLength
+    USB_DESC_TYPE_IAD,          // bDescriptorType
+    0x00,                       // bFirstInterface
+    0x01,                       // bInterfaceCount
+    USB_HID_CLASS_CODE,         // bFunctionClass (HID)
+    USB_HID_SUBCLASS_CODE_NONE, // bFunctionSubClass
+    USB_HID_PROTOCOL_CODE_NONE, // bFunctionProtocol
+    0x00,                       // iFunction (String Index 0)
+
+    // Interface Descriptor (HID Keyboard)
+    0x09,                       // bLength
+    USB_DESC_TYPE_INTERFACE,    // bDescriptorType
+    0x00,                       // bInterfaceNumber
+    0x00,                       // bAlternateSetting
+    0x01,                       // bNumEndpoints
+    USB_HID_CLASS_CODE,         // bInterfaceClass (HID)
+    USB_HID_SUBCLASS_CODE_NONE, // bInterfaceSubClass
+    USB_HID_PROTOCOL_CODE_KEYBOARD, // bInterfaceProtocol (Keyboard)
+    0x00,                       // iInterface (String Index 0)
+
+    // HID Descriptor (HID Keyboard)
+    0x09,                       // bLength
+    0x21,                       // bDescriptorType (HID)
+    0x11, 0x01,                 // bcdHID (1.11)
+    0x00,                       // bCountryCode
+    0x01,                       // bNumDescriptors
+    0x22,                       // bDescriptorType (Report)
+    0x3F, 0x00,                 // wDescriptorLength (63 bytes)
+
+    // Endpoint Descriptor (HID Keyboard)
+    0x07,                       // bLength
+    USB_DESC_TYPE_ENDPOINT,     // bDescriptorType
+    0x81,                       // bEndpointAddress (IN endpoint 1)
+    0x03,                       // bmAttributes (Interrupt)
+    0x08, 0x00,                 // wMaxPacketSize (8 bytes)
+    0x0A,                       // bInterval (10ms)
+
+    // Interface Association Descriptor (IAD) for Custom HID
+    0x08,                       // bLength
+    USB_DESC_TYPE_IAD,          // bDescriptorType
+    0x01,                       // bFirstInterface
+    0x01,                       // bInterfaceCount
+    USB_HID_CLASS_CODE,         // bFunctionClass (HID)
+    USB_HID_SUBCLASS_CODE_NONE, // bFunctionSubClass
+    USB_HID_PROTOCOL_CODE_NONE, // bFunctionProtocol
+    0x00,                       // iFunction (String Index 0)
+
+    // Interface Descriptor (Custom HID)
+    0x09,                       // bLength
+    USB_DESC_TYPE_INTERFACE,    // bDescriptorType
+    0x01,                       // bInterfaceNumber
+    0x00,                       // bAlternateSetting
+    0x02,                       // bNumEndpoints
+    USB_HID_CLASS_CODE,         // bInterfaceClass (HID)
+    USB_HID_SUBCLASS_CODE_NONE, // bInterfaceSubClass
+    USB_HID_PROTOCOL_CODE_NONE, // bInterfaceProtocol
+    0x00,                       // iInterface (String Index 0)
+
+    // HID Descriptor (Custom HID)
+    0x09,                       // bLength
+    0x21,                       // bDescriptorType (HID)
+    0x11, 0x01,                 // bcdHID (1.11)
+    0x00,                       // bCountryCode
+    0x01,                       // bNumDescriptors
+    0x22,                       // bDescriptorType (Report)
+    0x40, 0x00,                 // wDescriptorLength (64 bytes)
+
+    // Endpoint Descriptor (Custom HID IN)
+    0x07,                       // bLength
+    USB_DESC_TYPE_ENDPOINT,     // bDescriptorType
+    0x82,                       // bEndpointAddress (IN endpoint 2)
+    0x03,                       // bmAttributes (Interrupt)
+    0x40, 0x00,                 // wMaxPacketSize (64 bytes)
+    0x0A,                       // bInterval (10ms)
+
+    // Endpoint Descriptor (Custom HID OUT)
+    0x07,                       // bLength
+    USB_DESC_TYPE_ENDPOINT,     // bDescriptorType
+    0x02,                       // bEndpointAddress (OUT endpoint 2)
+    0x03,                       // bmAttributes (Interrupt)
+    0x40, 0x00,                 // wMaxPacketSize (64 bytes)
+    0x0A,                       // bInterval (10ms)
+
+    // Interface Association Descriptor (IAD) for Mass Storage
+    0x08,                       // bLength
+    USB_DESC_TYPE_IAD,          // bDescriptorType
+    0x02,                       // bFirstInterface
+    0x01,                       // bInterfaceCount
+    USB_MSC_CLASS_CODE,         // bFunctionClass (Mass Storage)
+    USB_MSC_SUBCLASS_CODE_BOT, // bFunctionSubClass (BOT)
+    USB_MSC_PROTOCOL_CODE_BOT, // bFunctionProtocol (BOT)
+    0x00,                       // iFunction (String Index 0)
+
+    // Interface Descriptor (Mass Storage)
+    0x09,                       // bLength
+    USB_DESC_TYPE_INTERFACE,    // bDescriptorType
+    0x02,                       // bInterfaceNumber
+    0x00,                       // bAlternateSetting
+    0x02,                       // bNumEndpoints
+    USB_MSC_CLASS_CODE,         // bInterfaceClass (Mass Storage)
+    USB_MSC_SUBCLASS_CODE_BOT, // bInterfaceSubClass (BOT)
+    USB_MSC_PROTOCOL_CODE_BOT, // bInterfaceProtocol (BOT)
+    0x00,                       // iInterface (String Index 0)
+
+    // Endpoint Descriptor (Mass Storage Bulk IN)
+    0x07,                       // bLength
+    USB_DESC_TYPE_ENDPOINT,     // bDescriptorType
+    0x83,                       // bEndpointAddress (IN endpoint 3)
+    0x02,                       // bmAttributes (Bulk)
+    0x40, 0x00,                 // wMaxPacketSize (64 bytes)
+    0x00,                       // bInterval (ignored for Bulk)
+
+    // Endpoint Descriptor (Mass Storage Bulk OUT)
+    0x07,                       // bLength
+    USB_DESC_TYPE_ENDPOINT,     // bDescriptorType
+    0x03,                       // bEndpointAddress (OUT endpoint 3)
+    0x02,                       // bmAttributes (Bulk)
+    0x40, 0x00,                 // wMaxPacketSize (64 bytes)
+    0x00                        // bInterval (ignored for Bulk)
+};
+
+static const uint8_t usb_string_descriptor_langid[] = {
+    0x04,                       // bLength
+    USB_DESC_TYPE_STRING,       // bDescriptorType
+    0x09, 0x04                  // wLANGID (English)
+};
+
+static const uint8_t usb_string_descriptor_manufacturer[] = {
+    0x1A,                       // bLength
+    USB_DESC_TYPE_STRING,       // bDescriptorType
+    'S', 0x00, 'T', 0x00, 'M', 0x00, 'i', 0x00, 'c', 0x00, 'r', 0x00, 'o', 0x00, 'e', 0x00, 'l', 0x00, 'e', 0x00, 'c', 0x00, 't', 0x00, 'r', 0x00, 'o', 0x00, 'n', 0x00, 'i', 0x00, 'c', 0x00, 's', 0x00
+};
+
+static const uint8_t usb_string_descriptor_product[] = {
+    0x1E,                       // bLength
+    USB_DESC_TYPE_STRING,       // bDescriptorType
+    'U', 0x00, 'S', 0x00, 'B', 0x00, ' ', 0x00, 'C', 0x00, 'o', 0x00, 'm', 0x00, 'p', 0x00, 'o', 0x00, 's', 0x00, 'i', 0x00, 't', 0x00, 'e', 0x00, ' ', 0x00, 'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00
+};
+
+static const uint8_t usb_string_descriptor_serial[] = {
+    0x12,                       // bLength
+    USB_DESC_TYPE_STRING,       // bDescriptorType
+    '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '1', 0x00
+};
+
+static const uint8_t usb_hid_report_descriptor_keyboard[] = {
+    0x05, 0x01,                 // USAGE_PAGE (Generic Desktop)
+    0x09, 0x06,                 // USAGE (Keyboard)
+    0xA1, 0x01,                 // COLLECTION (Application)
+    0x05, 0x07,                 // USAGE_PAGE (Keyboard)
+    0x19, 0xE0,                 // USAGE_MINIMUM (Keyboard LeftControl)
+    0x29, 0xE7,                 // USAGE_MAXIMUM (Keyboard Right GUI)
+    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
+    0x25, 0x01,                 // LOGICAL_MAXIMUM (1)
+    0x75, 0x01,                 // REPORT_SIZE (1)
+    0x95, 0x08,                 // REPORT_COUNT (8)
+    0x81, 0x02,                 // INPUT (Data,Var,Abs)
+    0x95, 0x01,                 // REPORT_COUNT (1)
+    0x75, 0x08,                 // REPORT_SIZE (8)
+    0x81, 0x01,                 // INPUT (Cnst,Ary,Abs)
+    0x95, 0x05,                 // REPORT_COUNT (5)
+    0x75, 0x08,                 // REPORT_SIZE (8)
+    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
+    0x25, 0x65,                 // LOGICAL_MAXIMUM (101)
+    0x05, 0x07,                 // USAGE_PAGE (Keyboard)
+    0x19, 0x00,                 // USAGE_MINIMUM (Reserved (no event indicated))
+    0x29, 0x65,                 // USAGE_MAXIMUM (Keyboard Application)
+    0x81, 0x00,                 // INPUT (Data,Ary,Abs)
+    0xC0                        // END_COLLECTION
+};
+
+static const uint8_t usb_hid_report_descriptor_custom[] = {
+    0x06, 0x00, 0xFF,           // USAGE_PAGE (Vendor Defined Page 1)
+    0x09, 0x01,                 // USAGE (Vendor Usage 1)
+    0xA1, 0x01,                 // COLLECTION (Application)
+    0x85, USB_HID_REPORT_ID_PIN_PROMPT, // REPORT_ID (PIN_PROMPT)
+    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
+    0x26, 0xFF, 0x00,           // LOGICAL_MAXIMUM (255)
+    0x75, 0x08,                 // REPORT_SIZE (8)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x01,                 // USAGE (Vendor Usage 1)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_POPUP_TRIGGER, // REPORT_ID (POPUP_TRIGGER)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x02,                 // USAGE (Vendor Usage 2)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_PIN_RESPONSE, // REPORT_ID (PIN_RESPONSE)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x03,                 // USAGE (Vendor Usage 3)
+    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
+    0x85, USB_HID_REPORT_ID_CREDENTIAL_LIST_REQUEST, // REPORT_ID (CREDENTIAL_LIST_REQUEST)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x04,                 // USAGE (Vendor Usage 4)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_CREDENTIAL_LIST_RESPONSE, // REPORT_ID (CREDENTIAL_LIST_RESPONSE)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x05,                 // USAGE (Vendor Usage 5)
+    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
+    0x85, USB_HID_REPORT_ID_SETTINGS_READ, // REPORT_ID (SETTINGS_READ)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x06,                 // USAGE (Vendor Usage 6)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_SETTINGS_WRITE, // REPORT_ID (SETTINGS_WRITE)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x07,                 // USAGE (Vendor Usage 7)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_TOTP_REQUEST, // REPORT_ID (TOTP_REQUEST)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x08,                 // USAGE (Vendor Usage 8)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_TOTP_RESPONSE, // REPORT_ID (TOTP_RESPONSE)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x09,                 // USAGE (Vendor Usage 9)
+    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
+    0x85, USB_HID_REPORT_ID_AUTOFILL_REQUEST, // REPORT_ID (AUTOFILL_REQUEST)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x0A,                 // USAGE (Vendor Usage 10)
+    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
+    0x85, USB_HID_REPORT_ID_STATUS, // REPORT_ID (STATUS)
+    0x95, 0x3F,                 // REPORT_COUNT (63)
+    0x09, 0x0B,                 // USAGE (Vendor Usage 11)
+    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
+    0xC0                        // END_COLLECTION
+};
+
 void usb_session_init(void) {
   memset(&g_session, 0, sizeof(g_session));
   g_expected_client_counter = 0u;

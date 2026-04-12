@@ -22,6 +22,20 @@ static SPI_HandleTypeDef hspi1;
 static OCTOSPI_HandleTypeDef hospi1;
 static GPIO_InitTypeDef GPIO_InitStruct = {0};
 
+// USB HID report buffer
+static uint8_t hid_report_buffer[64];
+static bool hid_report_pending = false;
+static uint8_t hid_report_id = 0;
+
+// Mass Storage variables
+static const uint8_t fat12_image[] = {
+    // FAT12 image data would go here
+    // This is a placeholder for the actual image data
+    0xEB, 0x3C, 0x90, 0x4D, 0x53, 0x44, 0x4F, 0x53, 0x35, 0x2E, 0x30, 0x00, 0x02, 0x08, 0x20, 0x00,
+    0x02, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x00, 0x3F, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+    // ... rest of the FAT12 image data ...
+};
+
 // System Clock Configuration
 void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -470,6 +484,93 @@ bool platform_hal_usb_hid_type(const char *text) {
     }
 
     return success;
+}
+
+// USB HID Send Report Implementation
+bool usb_hid_send_report(uint8_t report_id, const uint8_t *data, size_t data_len) {
+    if (data == NULL || data_len == 0 || data_len > 63) {
+        return false;
+    }
+
+    // Prepare the report with report ID
+    hid_report_buffer[0] = report_id;
+    memcpy(&hid_report_buffer[1], data, data_len);
+
+    // Send the report
+    if (HAL_PCD_EP_Transmit(&hpcd_USB_OTG_FS, 0x82, hid_report_buffer, data_len + 1) != HAL_OK) {
+        return false;
+    }
+
+    return true;
+}
+
+// USB HID Poll Report Implementation
+bool usb_hid_poll_report(uint8_t *report_id, uint8_t *data, size_t data_len) {
+    if (report_id == NULL || data == NULL || data_len == 0 || data_len > 63) {
+        return false;
+    }
+
+    // Check if there's a pending report
+    if (!hid_report_pending) {
+        return false;
+    }
+
+    // Copy the report data
+    *report_id = hid_report_id;
+    memcpy(data, hid_report_buffer, data_len);
+
+    // Clear the pending flag
+    hid_report_pending = false;
+
+    return true;
+}
+
+// Mass Storage SCSI Handler
+void usb_msc_scsi_handler(uint8_t *cmd, uint8_t *response, uint16_t *response_len) {
+    // Check the command
+    switch (cmd[0]) {
+        case 0x12: // INQUIRY
+            // Standard INQUIRY response
+            response[0] = 0x00; // Direct-access device
+            response[1] = 0x80; // Removable media
+            response[2] = 0x02; // ANSI version
+            response[3] = 0x02; // Response data format
+            response[4] = 0x1F; // Additional length
+            response[5] = 0x00; // Reserved
+            response[6] = 0x00; // Reserved
+            response[7] = 0x00; // Reserved
+            memcpy(&response[8], "STM32 USB MSC", 12); // Vendor ID and Product ID
+            response[20] = '1'; // Product revision level
+            response[21] = '.'; // Product revision level
+            response[22] = '0'; // Product revision level
+            response[23] = '0'; // Product revision level
+            *response_len = 36; // Total response length
+            break;
+
+        case 0x28: // READ(10)
+            // Handle READ(10) command
+            uint32_t lba = (cmd[2] << 24) | (cmd[3] << 16) | (cmd[4] << 8) | cmd[5];
+            uint16_t transfer_length = (cmd[7] << 8) | cmd[8];
+
+            // Calculate the offset in the FAT12 image
+            uint32_t offset = lba * 512;
+
+            // Check if the offset is within the image bounds
+            if (offset + transfer_length * 512 > sizeof(fat12_image)) {
+                *response_len = 0;
+                return;
+            }
+
+            // Copy the data from the FAT12 image
+            memcpy(response, &fat12_image[offset], transfer_length * 512);
+            *response_len = transfer_length * 512;
+            break;
+
+        default:
+            // Unsupported command
+            *response_len = 0;
+            break;
+    }
 }
 
 // SysTick handler for tick increment

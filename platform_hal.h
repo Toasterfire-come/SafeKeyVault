@@ -25,10 +25,10 @@ typedef struct {
 void platform_hal_init(void);
 void platform_hal_tick(void);
 void platform_hal_led_set(platform_hal_led_t led, bool on);
-bool platform_hal_touch_read(void); // Add missing declaration
-bool platform_hal_touch_held(void); // Add missing declaration
 void platform_hal_touch_set_simulated(bool pressed, bool held);
 bool platform_hal_usb_hid_type(const char *text);
 bool platform_hal_get_status(platform_hal_status_t *out_status);
+bool usb_hid_send_report(uint8_t report_id, const uint8_t *data, size_t data_len);
+bool usb_hid_poll_report(uint8_t *report_id, uint8_t *data, size_t data_len);
 
 #endif /* PLATFORM_HAL_H */
