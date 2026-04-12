@@ -15,11 +15,13 @@ typedef struct {
   size_t secret_len;
   char label[TOTP_LABEL_MAX_LEN];
   uint8_t digits; // Typically 6 or 8
+  bool initialized; // Added to track if the store has been initialized
 } totp_account_t;
 
 typedef struct {
   totp_account_t accounts[TOTP_MAX_ACCOUNTS];
   size_t count;
+  bool initialized; // Added to track if the store has been initialized
 } totp_store_t;
 
 /**
@@ -52,6 +54,25 @@ bool totp_delete_account(totp_store_t *store, size_t index);
  * @return true if the code was generated successfully, false otherwise.
  */
 bool totp_get_code(const totp_account_t *account, uint64_t unix_time, char *out_code, size_t out_len);
+
+/**
+ * @brief Types the current TOTP code via USB HID.
+ *
+ * @param account The TOTP account to generate the code for.
+ * @param unix_time The current Unix timestamp.
+ * @return true if the code was typed successfully, false otherwise.
+ */
+bool totp_type_code(const totp_account_t *account, uint64_t unix_time);
+
+/**
+ * @brief Looks up an account by index, generates its TOTP code, and types it via USB HID.
+ *
+ * @param store The TOTP store containing the accounts.
+ * @param index The index of the account to copy the code from.
+ * @param unix_time The current Unix timestamp.
+ * @return true if the code was copied successfully, false otherwise.
+ */
+bool totp_copy_code(const totp_store_t *store, size_t index, uint64_t unix_time);
 
 /**
  * @brief Saves the current TOTP store to persistent storage.
