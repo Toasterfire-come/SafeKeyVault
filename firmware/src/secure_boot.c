@@ -27,7 +27,7 @@
 typedef struct {
   bool initialized;
   secure_boot_policy_t policy;
-  uint8_t signing_pubkey[64]; // Public key for signature verification
+  uint8_t signing_pubkey[64]; // Public key for signature verification (P-256 public keys are 64 bytes)
   size_t signing_pubkey_len;
   bool signing_key_set;
   uint32_t current_version; // Current firmware version
@@ -38,7 +38,11 @@ static secure_boot_state_t g_secure_boot;
 // Function to read the firmware signature from the last flash sector
 static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN]) {
     uint8_t flash_sector_buffer[FLASH_SECTOR_SIZE]; // Assuming FLASH_SECTOR_SIZE is defined elsewhere
-    size_t bytes_read;
+    size_t bytes_read = 0;
+    bool success = false;
+
+    // Securely zeroize the buffer before use
+    security_secure_zero(flash_sector_buffer, sizeof(flash_sector_buffer));
 
     // Read the last flash sector
     if (spi_hal_read_sector(FLASH_LAST_SECTOR_ADDRESS, flash_sector_buffer, sizeof(flash_sector_buffer), &bytes_read) != SPI_HAL_SUCCESS) {
@@ -46,7 +50,7 @@ static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN])
         // Example debug logging:
         // printf("Secure Boot: Failed to read firmware signature from flash.\n");
 #endif
-        return false; // Failed to read flash sector
+        goto end; // Failed to read flash sector
     }
 
     // Extract the signature from the buffer
@@ -55,46 +59,65 @@ static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN])
         // Example debug logging:
         // printf("Secure Boot: Not enough data in flash sector for signature.\n");
 #endif
-        return false; // Not enough data in the sector for the signature
+        goto end; // Not enough data in the sector for the signature
     }
     memcpy(signature, flash_sector_buffer + FIRMWARE_SIGNATURE_OFFSET, ECDSA_P256_SIGNATURE_LEN);
-    return true;
+    success = true;
+
+end:
+    // Securely zeroize the flash sector buffer after use
+    security_secure_zero(flash_sector_buffer, sizeof(flash_sector_buffer));
+    return success;
 }
 
 // Function to read the firmware version from the ATECC608A slot
 static bool read_version_from_atecc(uint32_t *version) {
-    uint8_t version_data[VERSION_COUNTER_LEN];
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
-        return false;
+    uint8_t version_data[VERSION_COUNTER_LEN] = {0}; // Initialize for security
+    bool success = false;
+
+    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback || version == NULL) {
+        goto end;
     }
 
     if (atecc608a_read_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
         memcpy(version, version_data, VERSION_COUNTER_LEN);
-        return true;
+        success = true;
     }
 #if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Secure Boot: Failed to read version counter from ATECC.\n");
+    else {
+        // Example debug logging:
+        // printf("Secure Boot: Failed to read version counter from ATECC.\n");
+    }
 #endif
-    return false; // Indicate failure to read
+
+end:
+    security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
+    return success;
 }
 
 // Function to write the firmware version to the ATECC608A slot
 static bool write_version_to_atecc(uint32_t version) {
-    uint8_t version_data[VERSION_COUNTER_LEN];
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
-        return false;
+    uint8_t version_data[VERSION_COUNTER_LEN] = {0}; // Initialize for security
+    bool success = false;
+
+    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) {
+        goto end;
     }
 
     memcpy(version_data, &version, VERSION_COUNTER_LEN);
     if (atecc608a_write_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
-        return true;
+        success = true;
     }
 #if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Secure Boot: Failed to write version counter to ATECC.\n");
+    else {
+        // Example debug logging:
+        // printf("Secure Boot: Failed to write version counter to ATECC.\n");
+    }
 #endif
-    return false; // Indicate failure to write
+
+end:
+    security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
+    return success;
 }
 
 
@@ -103,7 +126,7 @@ void secure_boot_init(void) {
   g_secure_boot.initialized = true;
   // Initialize policy with defaults, can be overridden by secure_boot_set_policy
   g_secure_boot.policy.enforce_signature = true;
-  g_secure_boot.policy.enforce_antirollback = true; // Fix typo enforce_antiroolback -> enforce_antirollback
+  g_secure_boot.policy.enforce_antirollback = true;
   g_secure_boot.policy.min_allowed_version = 0; // No minimum by default
 
   // Initialize hardware drivers
@@ -113,9 +136,10 @@ void secure_boot_init(void) {
 
 void secure_boot_set_policy(const secure_boot_policy_t *policy) {
   if (!g_secure_boot.initialized) {
-    secure_boot_init();
+    secure_boot_init(); // Ensure initialization if not already. Handles default policy.
   }
   if (policy == NULL) {
+    // Optionally log an error or take default action, but don't crash.
     return;
   }
   g_secure_boot.policy = *policy;
@@ -123,7 +147,7 @@ void secure_boot_set_policy(const secure_boot_policy_t *policy) {
 
 void secure_boot_set_current_version(uint32_t version) {
   if (!g_secure_boot.initialized) {
-    secure_boot_init();
+    secure_boot_init(); // Ensure initialization if not already.
   }
   g_secure_boot.current_version = version;
 }
@@ -133,7 +157,7 @@ bool secure_boot_set_signing_pubkey(const uint8_t *pubkey, size_t pubkey_len) {
     return false;
   }
   if (!g_secure_boot.initialized) {
-    secure_boot_init();
+    secure_boot_init(); // Ensure initialization if not already.
   }
   memcpy(g_secure_boot.signing_pubkey, pubkey, pubkey_len);
   g_secure_boot.signing_pubkey_len = pubkey_len;
@@ -145,24 +169,25 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
                                  const uint8_t *payload_hash,
                                  size_t payload_hash_len,
                                  secure_boot_result_t *out_result) {
-  uint8_t firmware_signature[ECDSA_P256_SIGNATURE_LEN];
-  uint32_t stored_version;
+  uint8_t firmware_signature[ECDSA_P256_SIGNATURE_LEN] = {0}; // Initialize for security
+  uint32_t stored_version = 0;
   bool signature_ok = false;
   bool rollback_ok = false;
+  bool overall_success = false; // Flag for final return status
 
   if (out_result == NULL) {
     return false;
   }
-  memset(out_result, 0, sizeof(*out_result));
+  memset(out_result, 0, sizeof(*out_result)); // Zeroize result structure
   if (!g_secure_boot.initialized || manifest == NULL || payload_hash == NULL) {
-    return false;
+    goto end;
   }
   if (payload_hash_len != FIRMWARE_HASH_LEN) {
 #if !FIRMWARE_PRODUCTION
     // Example debug logging:
     // printf("Secure Boot: Payload hash length mismatch (%zu != %d).\n", payload_hash_len, FIRMWARE_HASH_LEN);
 #endif
-    return false; // Hash length mismatch
+    goto end; // Hash length mismatch
   }
 
   // 1. Verify Firmware Signature
@@ -200,7 +225,7 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   }
 
   // 2. Verify Anti-Rollback Counter
-  if (g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
+  if (g_secure_boot.policy.enforce_antirollback) {
     // Read the stored version from ATECC608A slot 7
     if (read_version_from_atecc(&stored_version)) {
         // Check if the manifest version is greater than or equal to the stored version
@@ -208,9 +233,12 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
             rollback_ok = true;
         }
     } else {
-        // If version cannot be read from ATECC, assume it's okay if min_allowed_version is 0
-        // or if the manifest version meets the minimum policy.
-        if (manifest->version >= g_secure_boot.policy.min_allowed_version) {
+        // If version cannot be read from ATECC for the first time, assume it's okay
+        // if the manifest version meets the minimum policy.
+        // This handles initial provisioning where ATECC might not have a version yet.
+        if (g_secure_boot.policy.min_allowed_version == 0 && manifest->version >= 0) { // No min_allowed_version specified, allow
+             rollback_ok = true;
+        } else if (manifest->version >= g_secure_boot.policy.min_allowed_version) {
             rollback_ok = true;
         }
     }
@@ -228,10 +256,10 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   // 3. Final Acceptance
   out_result->accepted = out_result->signature_valid && out_result->antirollback_ok;
 
-  // If the new firmware is accepted, update the version counter in ATECC
-  if (out_result->accepted && g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
+  // If the new firmware is accepted AND anti-rollback is enforced, update the version counter in ATECC
+  if (out_result->accepted && g_secure_boot.policy.enforce_antirollback) {
       if (!write_version_to_atecc(manifest->version)) {
-          // Failed to update version counter, this is a critical error.
+          // Failed to update version counter. This is a critical error.
           // The device might enter a locked state or require manual intervention.
           out_result->accepted = false; // Reject if version update fails
 #if !FIRMWARE_PRODUCTION
@@ -240,6 +268,9 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
 #endif
       }
   }
+  overall_success = true;
 
-  return true;
+end:
+  security_secure_zero(firmware_signature, sizeof(firmware_signature)); // Zeroize sensitive signature
+  return overall_success;
 }

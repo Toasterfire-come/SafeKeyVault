@@ -13,7 +13,7 @@ static void build_session_aad(const usb_session_state_t *state,
                               uint32_t counter,
                               uint8_t aad[16]) {
   memset(aad, 0, 16u);
-  if (state != NULL) {
+  if (state != NULL) { // Ensure state is valid before dereferencing
     memcpy(aad, &state->session_id, sizeof(state->session_id));
   }
   memcpy(aad + 4u, &counter, sizeof(counter));
@@ -279,69 +279,102 @@ static const uint8_t usb_hid_report_descriptor_custom[] = {
 };
 
 void usb_session_init(void) {
-  memset(&g_session, 0, sizeof(g_session));
+  // Use secure_zero to ensure sensitive data is not left in memory
+  security_secure_zero(&g_session, sizeof(g_session));
   g_expected_client_counter = 0u;
-  memset(g_challenge, 0, sizeof(g_challenge));
+  security_secure_zero(g_challenge, sizeof(g_challenge)); // Zeroize challenge
   g_challenge_len = 0u;
 }
 
 bool usb_session_start(usb_session_challenge_t *out_challenge) {
   uint8_t seed[16] = {0};
   uint8_t hash[16] = {0};
+  bool success = false;
+
   if (out_challenge == NULL) {
     return false;
   }
-  memset(&g_session, 0, sizeof(g_session));
+
+  // Securely zeroize global session state before starting a new session
+  security_secure_zero(&g_session, sizeof(g_session));
   g_session.session_id = 1u;
   g_expected_client_counter = 1u;
   g_session.authenticated = false;
   g_challenge_len = 16u;
-  memcpy(seed, "usb-session-seed", 16u);
+
+  // Initialize seed for challenge generation
+  memcpy(seed, "usb-session-seed", sizeof(seed)); // Use sizeof(seed) to ensure full copy if smaller
   crypto_engine_hash16(seed, sizeof(seed), hash);
-  memcpy(g_challenge, hash, 16u);
+
+  // Copy hash to global challenge and output challenge
+  memcpy(g_challenge, hash, sizeof(g_challenge)); // Use sizeof(g_challenge) to ensure full copy
   out_challenge->session_id = g_session.session_id;
   out_challenge->challenge_len = g_challenge_len;
   memcpy(out_challenge->challenge, g_challenge, g_challenge_len);
+  success = true;
+
+  // Securely zeroize sensitive intermediate buffers
   security_secure_zero(seed, sizeof(seed));
   security_secure_zero(hash, sizeof(hash));
-  return true;
+
+  return success;
 }
 
 bool usb_session_debug_compute_expected_response(const usb_session_challenge_t *challenge,
                                                  uint8_t *out_response,
                                                  size_t out_len) {
-  uint8_t digest[16];
+  uint8_t digest[16] = {0}; // Initialize for security
+  bool success = false;
+
   if (challenge == NULL || out_response == NULL || out_len < 16u) {
-    return false;
+    goto end;
   }
+  // Validate challenge_len
+  if (challenge->challenge_len > sizeof(challenge->challenge)) {
+    goto end;
+  }
+
   crypto_engine_hash16(challenge->challenge, challenge->challenge_len, digest);
-  memcpy(out_response, digest, 16u);
-  security_secure_zero(digest, sizeof(digest));
-  return true;
+  memcpy(out_response, digest, 16u); // Ensure to copy exactly 16 bytes for a full hash
+  success = true;
+
+end:
+  security_secure_zero(digest, sizeof(digest)); // Zeroize sensitive digest
+  return success;
 }
 
 bool usb_session_authenticate(const uint8_t *host_response, size_t response_len) {
-  usb_session_challenge_t current = {0};
-  uint8_t expected[16];
+  usb_session_challenge_t current = {0}; // Initialize for security
+  uint8_t expected[16] = {0}; // Initialize for security
+  bool success = false;
+
   if (host_response == NULL || response_len < 16u) {
-    return false;
+    goto end;
   }
   current.session_id = g_session.session_id;
   current.challenge_len = g_challenge_len;
-  memcpy(current.challenge, g_challenge, current.challenge_len);
+  memcpy(current.challenge, g_challenge, current.challenge_len); // Copy challenge
+
+  // Compute expected response using the helper function
   if (!usb_session_debug_compute_expected_response(&current, expected, sizeof(expected))) {
-    return false;
+    goto end; // Error in computing expected response
   }
+
+  // Perform constant-time comparison of the host response with the expected response
   if (!sec_consttime_memeq(expected, host_response, 16u)) {
-    security_secure_zero(expected, sizeof(expected));
-    return false;
+    goto end; // Authentication failed
   }
+
   g_session.authenticated = true;
-  security_secure_zero(expected, sizeof(expected));
-  return true;
+  success = true;
+
+end:
+  security_secure_zero(expected, sizeof(expected)); // Zeroize sensitive expected response
+  return success;
 }
 
 bool usb_session_is_authenticated(void) {
+  // This state is not considered sensitive, no zeroization needed for return value
   return g_session.authenticated;
 }
 
@@ -349,7 +382,7 @@ bool usb_session_get_state(usb_session_state_t *out_state) {
   if (out_state == NULL) {
     return false;
   }
-  *out_state = g_session;
+  *out_state = g_session; // Copy the current session state
   return true;
 }
 
@@ -357,55 +390,83 @@ bool usb_session_sign_payload(const uint8_t *payload,
                               size_t payload_len,
                               uint8_t *out_mac,
                               size_t mac_len) {
-  uint8_t aad[16];
-  uint8_t scratch[32];
+  uint8_t aad[16] = {0}; // Initialize for security
+  uint8_t scratch[32] = {0}; // Initialize for security
   size_t scratch_len = sizeof(scratch);
+  bool success = false;
+
   if (!g_session.authenticated || payload == NULL || out_mac == NULL || mac_len < 16u) {
-    return false;
+    goto end;
   }
+  // Validate payload_len against scratch buffer capacity
+  if (payload_len > sizeof(scratch)) {
+    goto end;
+  }
+
   build_session_aad(&g_session, g_expected_client_counter, aad);
+
   if (!crypto_engine_encrypt_aead(payload, payload_len,
                                   aad, sizeof(aad),
                                   scratch, sizeof(scratch), &scratch_len, out_mac)) {
-    return false;
+    goto end; // AEAD encryption failed
   }
-  security_secure_zero(scratch, sizeof(scratch));
-  security_secure_zero(aad, sizeof(aad));
-  return true;
+  success = true;
+
+end:
+  security_secure_zero(scratch, sizeof(scratch)); // Zeroize sensitive scratch buffer
+  security_secure_zero(aad, sizeof(aad)); // Zeroize sensitive AAD
+  // out_mac is an output, not zeroized here. Caller handles its sensitivity.
+  return success;
 }
 
 bool usb_session_verify_payload(const uint8_t *payload,
                                 size_t payload_len,
                                 const uint8_t *mac,
                                 size_t mac_len) {
-  uint8_t expected[16];
-  uint8_t aad[16];
-  uint8_t scratch[32];
+  uint8_t expected_mac[16] = {0}; // Use a distinct name and initialize for security
+  uint8_t aad[16] = {0}; // Initialize for security
+  uint8_t scratch[32] = {0}; // Initialize for security
   size_t scratch_len = sizeof(scratch);
+  bool success = false;
+
   if (!g_session.authenticated || payload == NULL || mac == NULL || mac_len < 16u) {
-    return false;
+    goto end;
   }
+  // Validate payload_len against scratch buffer capacity
+  if (payload_len > sizeof(scratch)) {
+    goto end;
+  }
+
   build_session_aad(&g_session, g_expected_client_counter, aad);
+
+  // Re-encrypt the payload to produce the expected MAC for verification
   if (!crypto_engine_encrypt_aead(payload, payload_len,
                                   aad, sizeof(aad),
-                                  scratch, sizeof(scratch), &scratch_len, expected)) {
-    return false;
+                                  scratch, sizeof(scratch), &scratch_len, expected_mac)) {
+    goto end; // AEAD encryption failed during verification
   }
-  security_secure_zero(scratch, sizeof(scratch));
-  security_secure_zero(aad, sizeof(aad));
-  if (!sec_consttime_memeq(expected, mac, 16u)) {
-    security_secure_zero(expected, sizeof(expected));
-    return false;
+
+  // Perform constant-time comparison of the provided MAC with the expected MAC
+  if (!sec_consttime_memeq(expected_mac, mac, 16u)) {
+    goto end; // MAC verification failed
   }
+
+  // If verification passes, increment the counter and update session state
   g_expected_client_counter++;
   g_session.verified_frames = g_expected_client_counter - 1u;
-  security_secure_zero(expected, sizeof(expected));
-  return true;
+  success = true;
+
+end:
+  security_secure_zero(scratch, sizeof(scratch));    // Zeroize sensitive scratch buffer
+  security_secure_zero(aad, sizeof(aad));          // Zeroize sensitive AAD
+  security_secure_zero(expected_mac, sizeof(expected_mac)); // Zeroize sensitive expected MAC
+  return success;
 }
 
 void usb_session_end(void) {
+  // Use secure_zero to ensure sensitive data is not left in memory
   security_secure_zero(&g_session, sizeof(g_session));
-  g_expected_client_counter = 0u;
-  security_secure_zero(g_challenge, sizeof(g_challenge));
-  g_challenge_len = 0u;
+  g_expected_client_counter = 0u; // Reset counter
+  security_secure_zero(g_challenge, sizeof(g_challenge)); // Zeroize challenge
+  g_challenge_len = 0u; // Reset challenge length
 }
