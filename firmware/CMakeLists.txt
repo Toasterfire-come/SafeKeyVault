@@ -33,6 +33,15 @@ include_directories(
     Drivers/CMSIS/Device/ST/STM32U5xx/Include
 )
 
+# Generate companion_html.h from index.html
+add_custom_command(
+    OUTPUT firmware/include/companion_html.h
+    COMMAND ${CMAKE_COMMAND} -E make_directory firmware/include
+    COMMAND python3 tools/embed_html.py companion/index.html firmware/include/companion_html.h
+    DEPENDS companion/index.html tools/embed_html.py
+    COMMENT "Generating companion_html.h from index.html"
+)
+
 # Source files
 set(FIRMWARE_SOURCES
     src/platform_hal.c
@@ -82,6 +91,14 @@ endif()
 target_compile_definitions(firmware PRIVATE
     "USE_HAL_DRIVER"
     "STM32U5xx"
+)
+
+# Add the generated header to include paths
+target_include_directories(firmware PRIVATE firmware/include)
+
+# Add the generated header as a dependency
+add_custom_target(generate_html_header ALL
+    DEPENDS firmware/include/companion_html.h
 )
 
 # Enable testing
