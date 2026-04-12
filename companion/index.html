@@ -1,0 +1,2425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Companion</title>
+    <style>
+        :root {
+            --bg-color: #0F1117;
+            --card-color: #1C1E26;
+            --accent-color: #4A9EFF;
+            --text-color: white;
+            --error-color: #FF4A4A;
+            --success-color: #4AFF4A;
+            --warning-color: #FFD700;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            flex: 1;
+            padding: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        .status-bar {
+            background-color: var(--card-color);
+            padding: 0.5rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 0 0 8px 8px;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            z-index: 100;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .connection-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--error-color);
+        }
+
+        .connection-dot.connected {
+            background-color: var(--success-color);
+        }
+
+        .device-icon {
+            width: 100px;
+            height: 100px;
+            margin: 2rem auto;
+            display: block;
+            background-color: var(--card-color);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4rem;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            min-width: 120px;
+            min-height: 44px;
+        }
+
+        .btn:hover {
+            background-color: #3a82d9;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background-color: var(--card-color);
+        }
+
+        .btn-error {
+            background-color: var(--error-color);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-warning {
+            background-color: var(--warning-color);
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .card {
+            background-color: var(--card-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .card-content {
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .pin-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .pin-digit {
+            background-color: var(--card-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pin-digit:hover {
+            background-color: #2a2d36;
+        }
+
+        .pin-digit:active {
+            transform: scale(0.95);
+        }
+
+        .pin-digit.backspace {
+            grid-column: span 2;
+        }
+
+        .pin-indicators {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .pin-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #333;
+            transition: all 0.2s ease;
+        }
+
+        .pin-indicator.active {
+            background-color: var(--accent-color);
+        }
+
+        .shake {
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+
+        .tab-bar {
+            background-color: var(--card-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 0.5rem 0;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            color: #888;
+            transition: all 0.2s ease;
+        }
+
+        .tab-item.active {
+            color: var(--accent-color);
+        }
+
+        .tab-icon {
+            font-size: 1.5rem;
+        }
+
+        .tab-label {
+            font-size: 0.75rem;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--accent-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .fab:hover {
+            background-color: #3a82d9;
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+        }
+
+        .search-bar {
+            margin-bottom: 1rem;
+        }
+
+        .credential-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .favicon {
+            width: 32px;
+            height: 32px;
+            background-color: #333;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #888;
+        }
+
+        .credential-info {
+            flex: 1;
+        }
+
+        .credential-origin {
+            font-weight: bold;
+        }
+
+        .credential-username {
+            color: #888;
+        }
+
+        .totp-card {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .totp-label {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .totp-code {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .totp-timer {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .timer-svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .timer-text {
+            font-size: 0.875rem;
+        }
+
+        .settings-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-section-title {
+            font-size: 1.125rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .toggle-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toggle-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background-color: var(--bg-color);
+            border-radius: 4px;
+        }
+
+        .toggle-label {
+            flex: 1;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--accent-color);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .select-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .select-item {
+            padding: 0.5rem;
+            background-color: var(--bg-color);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .select-item.selected {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--card-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            margin: 2rem 0;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state-text {
+            margin-bottom: 1rem;
+        }
+
+        .reconnect-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .reconnect-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent-color);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .reconnect-text {
+            font-size: 1.25rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .status-bar, .tab-bar {
+                padding: 0.25rem 0;
+            }
+
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .pin-digit {
+                padding: 0.75rem;
+                font-size: 1.25rem;
+            }
+
+            .card {
+                padding: 0.75rem;
+            }
+
+            .modal-content {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-bar">
+        <div class="connection-status">
+            <div class="connection-dot"></div>
+            <span class="device-state">Disconnected</span>
+        </div>
+        <div class="lock-icon">🔒</div>
+    </div>
+
+    <div class="container">
+        <!-- CONNECT VIEW -->
+        <div class="view active" id="connect-view">
+            <div class="device-icon">🔐</div>
+            <h1 style="text-align: center; margin-bottom: 2rem;">Device Companion</h1>
+            <button class="btn btn-block" id="connect-btn">Connect Device</button>
+            <div id="webhid-unsupported" style="display: none; margin-top: 1rem; text-align: center;">
+                <p>WebHID is not supported in your browser. Please use Chrome or Edge.</p>
+                <a href="https://www.google.com/chrome/" target="_blank" class="btn btn-secondary">Download Chrome</a>
+                <a href="https://www.microsoft.com/edge" target="_blank" class="btn btn-secondary">Download Edge</a>
+            </div>
+        </div>
+
+        <!-- PIN ENTRY VIEW -->
+        <div class="view" id="pin-entry-view">
+            <h2 style="text-align: center; margin-bottom: 1rem;">Enter PIN</h2>
+            <div class="pin-indicators">
+                <div class="pin-indicator"></div>
+                <div class="pin-indicator"></div>
+                <div class="pin-indicator"></div>
+                <div class="pin-indicator"></div>
+                <div class="pin-indicator"></div>
+            </div>
+            <div class="pin-grid">
+                <div class="pin-digit">1</div>
+                <div class="pin-digit">2</div>
+                <div class="pin-digit">3</div>
+                <div class="pin-digit">4</div>
+                <div class="pin-digit">5</div>
+                <div class="pin-digit">6</div>
+                <div class="pin-digit">7</div>
+                <div class="pin-digit">8</div>
+                <div class="pin-digit">9</div>
+                <div class="pin-digit backspace">⌫</div>
+                <div class="pin-digit">0</div>
+                <div class="pin-digit" id="pin-clear">Clear</div>
+            </div>
+            <div id="pin-attempts" style="text-align: center; margin-top: 1rem; display: none;">
+                <p>Attempts remaining: <span id="attempts-count">3</span></p>
+                <p id="lockout-warning" style="color: var(--error-color); display: none;">Warning: Too many attempts will lock your device.</p>
+            </div>
+        </div>
+
+        <!-- SETUP WIZARD VIEW -->
+        <div class="view" id="setup-wizard-view">
+            <div id="setup-step-1" class="setup-step">
+                <h2 style="text-align: center; margin-bottom: 1rem;">Welcome</h2>
+                <div class="form-group">
+                    <label for="device-name">Device Name</label>
+                    <input type="text" id="device-name" class="form-control" placeholder="My Device">
+                </div>
+                <button class="btn btn-block" id="setup-next-1">Next</button>
+            </div>
+
+            <div id="setup-step-2" class="setup-step" style="display: none;">
+                <h2 style="text-align: center; margin-bottom: 1rem;">Set PIN</h2>
+                <div class="form-group">
+                    <label for="set-pin">Enter 5-digit PIN</label>
+                    <input type="password" id="set-pin" class="form-control" placeholder="•••••" maxlength="5">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-pin">Confirm PIN</label>
+                    <input type="password" id="confirm-pin" class="form-control" placeholder="•••••" maxlength="5">
+                </div>
+                <p id="pin-mismatch" style="color: var(--error-color); display: none;">PINs do not match</p>
+                <button class="btn btn-block" id="setup-next-2">Next</button>
+            </div>
+
+            <div id="setup-step-3" class="setup-step" style="display: none;">
+                <h2 style="text-align: center; margin-bottom: 1rem;">Security Settings</h2>
+                <div class="form-group">
+                    <label>Auto-lock Timeout</label>
+                    <div class="select-group" id="autolock-select">
+                        <div class="select-item selected" data-value="30">30 seconds</div>
+                        <div class="select-item" data-value="60">1 minute</div>
+                        <div class="select-item" data-value="300">5 minutes</div>
+                        <div class="select-item" data-value="0">Never</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>PIN Attempt Limit</label>
+                    <div class="select-group" id="attempts-select">
+                        <div class="select-item selected" data-value="3">3 attempts</div>
+                        <div class="select-item" data-value="5">5 attempts</div>
+                        <div class="select-item" data-value="10">10 attempts</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Wipe on Lockout</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="wipe-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-block" id="setup-next-3">Next</button>
+            </div>
+
+            <div id="setup-step-4" class="setup-step" style="display: none;">
+                <div style="text-align: center; margin: 2rem 0;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">✓</div>
+                    <h2>Setup Complete</h2>
+                    <p>Your device is now ready to use.</p>
+                </div>
+                <button class="btn btn-block" id="setup-finish">Continue</button>
+            </div>
+        </div>
+
+        <!-- MAIN VIEW -->
+        <div class="view" id="main-view">
+            <!-- PASSWORDS TAB -->
+            <div class="tab-content active" id="passwords-tab">
+                <div class="search-bar">
+                    <input type="text" class="form-control" placeholder="Search credentials..." id="search-input">
+                </div>
+                <div id="credentials-list">
+                    <!-- Credential cards will be inserted here -->
+                </div>
+                <div class="empty-state" id="empty-credentials" style="display: none;">
+                    <div class="empty-state-icon">🔑</div>
+                    <div class="empty-state-text">No credentials saved yet</div>
+                    <button class="btn" id="add-first-credential">Add Credential</button>
+                </div>
+            </div>
+
+            <!-- TOTP TAB -->
+            <div class="tab-content" id="totp-tab" style="display: none;">
+                <div id="totp-list">
+                    <!-- TOTP cards will be inserted here -->
+                </div>
+                <div class="empty-state" id="empty-totp" style="display: none;">
+                    <div class="empty-state-icon">⏳</div>
+                    <div class="empty-state-text">No TOTP accounts added yet</div>
+                    <button class="btn" id="add-first-totp">Add Account</button>
+                </div>
+            </div>
+
+            <!-- SETTINGS TAB -->
+            <div class="tab-content" id="settings-tab" style="display: none;">
+                <div class="settings-section">
+                    <div class="settings-section-title">Security</div>
+                    <div class="form-group">
+                        <label>Auto-lock Timeout</label>
+                        <div class="select-group" id="settings-autolock">
+                            <div class="select-item selected" data-value="30">30 seconds</div>
+                            <div class="select-item" data-value="60">1 minute</div>
+                            <div class="select-item" data-value="300">5 minutes</div>
+                            <div class="select-item" data-value="0">Never</div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>PIN Attempt Limit</label>
+                        <div class="select-group" id="settings-attempts">
+                            <div class="select-item selected" data-value="3">3 attempts</div>
+                            <div class="select-item" data-value="5">5 attempts</div>
+                            <div class="select-item" data-value="10">10 attempts</div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Wipe on Lockout</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-wipe">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <button class="btn btn-block" id="change-pin">Change PIN</button>
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-section-title">Behavior</div>
+                    <div class="form-group">
+                        <label>Auto-type on plugin</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-autotype">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Require touch for fill</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-touch">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Auto-popup</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-autopopup">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Passkeys mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-passkeys">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-section-title">Device</div>
+                    <div class="form-group">
+                        <label>Firmware Version</label>
+                        <div class="form-control" style="background-color: var(--card-color);">1.0.0</div>
+                    </div>
+                    <button class="btn btn-block btn-error" id="factory-reset">Factory Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD CREDENTIAL MODAL -->
+        <div class="modal" id="add-credential-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">Add Credential</div>
+                    <button class="modal-close" id="close-credential-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="credential-origin">Origin</label>
+                        <input type="text" id="credential-origin" class="form-control" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="credential-username">Username</label>
+                        <input type="text" id="credential-username" class="form-control" placeholder="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="credential-password">Password</label>
+                        <input type="password" id="credential-password" class="form-control" placeholder="password">
+                        <div id="password-strength" style="margin-top: 0.5rem; height: 4px; background-color: #333; border-radius: 2px; overflow: hidden;">
+                            <div id="strength-meter" style="height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancel-credential">Cancel</button>
+                    <button class="btn" id="save-credential">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- EDIT CREDENTIAL MODAL -->
+        <div class="modal" id="edit-credential-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">Edit Credential</div>
+                    <button class="modal-close" id="close-edit-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-origin">Origin</label>
+                        <input type="text" id="edit-origin" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-username">Username</label>
+                        <input type="text" id="edit-username" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-password">Password</label>
+                        <input type="password" id="edit-password" class="form-control">
+                        <div id="edit-strength" style="margin-top: 0.5rem; height: 4px; background-color: #333; border-radius: 2px; overflow: hidden;">
+                            <div id="edit-strength-meter" style="height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-error" id="delete-credential">Delete</button>
+                    <button class="btn btn-secondary" id="cancel-edit">Cancel</button>
+                    <button class="btn" id="update-credential">Update</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD TOTP MODAL -->
+        <div class="modal" id="add-totp-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">Add TOTP Account</div>
+                    <button class="modal-close" id="close-totp-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="totp-label">Label</label>
+                        <input type="text" id="totp-label" class="form-control" placeholder="Account Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="totp-secret">Secret</label>
+                        <input type="text" id="totp-secret" class="form-control" placeholder="Base32 Secret">
+                    </div>
+                    <div class="form-group">
+                        <label>Digit Count</label>
+                        <div class="select-group" id="digit-select">
+                            <div class="select-item selected" data-value="6">6 digits</div>
+                            <div class="select-item" data-value="8">8 digits</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancel-totp">Cancel</button>
+                    <button class="btn" id="save-totp">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHANGE PIN MODAL -->
+        <div class="modal" id="change-pin-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">Change PIN</div>
+                    <button class="modal-close" id="close-pin-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="current-pin">Current PIN</label>
+                        <input type="password" id="current-pin" class="form-control" placeholder="•••••" maxlength="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-pin">New PIN</label>
+                        <input type="password" id="new-pin" class="form-control" placeholder="•••••" maxlength="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-new-pin">Confirm New PIN</label>
+                        <input type="password" id="confirm-new-pin" class="form-control" placeholder="•••••" maxlength="5">
+                    </div>
+                    <p id="pin-error" style="color: var(--error-color); display: none;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancel-pin">Cancel</button>
+                    <button class="btn" id="update-pin">Update</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FACTORY RESET MODAL -->
+        <div class="modal" id="reset-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">Factory Reset</div>
+                    <button class="modal-close" id="close-reset-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to perform a factory reset? This will erase all data and settings.</p>
+                    <div class="form-group">
+                        <label for="reset-confirm">Type "RESET" to confirm</label>
+                        <input type="text" id="reset-confirm" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancel-reset">Cancel</button>
+                    <button class="btn btn-error" id="confirm-reset">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RECONNECT OVERLAY -->
+        <div class="reconnect-overlay" id="reconnect-overlay">
+            <div class="spinner"></div>
+            <div class="reconnect-text">Reconnecting to device...</div>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tab-item active" data-tab="passwords-tab">
+            <div class="tab-icon">🔑</div>
+            <div class="tab-label">Passwords</div>
+        </div>
+        <div class="tab-item" data-tab="totp-tab">
+            <div class="tab-icon">⏳</div>
+            <div class="tab-label">TOTP</div>
+        </div>
+        <div class="tab-item" data-tab="settings-tab">
+            <div class="tab-icon">⚙️</div>
+            <div class="tab-label">Settings</div>
+        </div>
+        <div class="tab-item" id="lock-btn">
+            <div class="tab-icon">🔒</div>
+            <div class="tab-label">Lock</div>
+        </div>
+    </div>
+
+    <div class="fab" id="add-credential-btn">+</div>
+
+    <script>
+        // Global variables
+        let device;
+        let currentPin = '';
+        let currentView = 'connect-view';
+        let currentTab = 'passwords-tab';
+        let credentials = [];
+        let totpAccounts = [];
+        let settings = {};
+        let currentCredentialIndex = -1;
+        let currentTotpIndex = -1;
+        let totpInterval;
+        let reconnectAttempts = 0;
+
+        // DOM elements
+        const views = {
+            connect: document.getElementById('connect-view'),
+            pinEntry: document.getElementById('pin-entry-view'),
+            setupWizard: document.getElementById('setup-wizard-view'),
+            main: document.getElementById('main-view')
+        };
+
+        const statusBar = {
+            dot: document.querySelector('.connection-dot'),
+            state: document.querySelector('.device-state'),
+            lockIcon: document.querySelector('.lock-icon')
+        };
+
+        const pinIndicators = document.querySelectorAll('.pin-indicator');
+        const pinDigits = document.querySelectorAll('.pin-digit');
+        const pinClear = document.getElementById('pin-clear');
+        const pinAttempts = document.getElementById('pin-attempts');
+        const attemptsCount = document.getElementById('attempts-count');
+        const lockoutWarning = document.getElementById('lockout-warning');
+
+        const setupSteps = {
+            step1: document.getElementById('setup-step-1'),
+            step2: document.getElementById('setup-step-2'),
+            step3: document.getElementById('setup-step-3'),
+            step4: document.getElementById('setup-step-4')
+        };
+
+        const setupNextButtons = {
+            step1: document.getElementById('setup-next-1'),
+            step2: document.getElementById('setup-next-2'),
+            step3: document.getElementById('setup-next-3'),
+            finish: document.getElementById('setup-finish')
+        };
+
+        const tabItems = document.querySelectorAll('.tab-item');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const addCredentialBtn = document.getElementById('add-credential-btn');
+        const credentialsList = document.getElementById('credentials-list');
+        const emptyCredentials = document.getElementById('empty-credentials');
+        const addFirstCredential = document.getElementById('add-first-credential');
+        const totpList = document.getElementById('totp-list');
+        const emptyTotp = document.getElementById('empty-totp');
+        const addFirstTotp = document.getElementById('add-first-totp');
+        const lockBtn = document.getElementById('lock-btn');
+
+        const modals = {
+            addCredential: document.getElementById('add-credential-modal'),
+            editCredential: document.getElementById('edit-credential-modal'),
+            addTotp: document.getElementById('add-totp-modal'),
+            changePin: document.getElementById('change-pin-modal'),
+            reset: document.getElementById('reset-modal')
+        };
+
+        const modalCloseButtons = {
+            addCredential: document.getElementById('close-credential-modal'),
+            editCredential: document.getElementById('close-edit-modal'),
+            addTotp: document.getElementById('close-totp-modal'),
+            changePin: document.getElementById('close-pin-modal'),
+            reset: document.getElementById('close-reset-modal')
+        };
+
+        const modalCancelButtons = {
+            addCredential: document.getElementById('cancel-credential'),
+            editCredential: document.getElementById('cancel-edit'),
+            addTotp: document.getElementById('cancel-totp'),
+            changePin: document.getElementById('cancel-pin'),
+            reset: document.getElementById('cancel-reset')
+        };
+
+        const modalSaveButtons = {
+            addCredential: document.getElementById('save-credential'),
+            editCredential: document.getElementById('update-credential'),
+            addTotp: document.getElementById('save-totp'),
+            changePin: document.getElementById('update-pin'),
+            reset: document.getElementById('confirm-reset')
+        };
+
+        const modalDeleteButton = document.getElementById('delete-credential');
+        const reconnectOverlay = document.getElementById('reconnect-overlay');
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if WebHID is supported
+            if (!('hid' in navigator)) {
+                document.getElementById('webhid-unsupported').style.display = 'block';
+                document.getElementById('connect-btn').style.display = 'none';
+            }
+
+            // Set up event listeners
+            setupEventListeners();
+
+            // Start with connect view
+            showView('connect-view');
+        });
+
+        // Set up all event listeners
+        function setupEventListeners() {
+            // Connect button
+            document.getElementById('connect-btn').addEventListener('click', requestDevice);
+
+            // PIN entry
+            pinDigits.forEach(digit => {
+                digit.addEventListener('click', handlePinDigitClick);
+            });
+
+            pinClear.addEventListener('click', () => {
+                currentPin = '';
+                updatePinIndicators();
+            });
+
+            // Setup wizard
+            setupNextButtons.step1.addEventListener('click', () => showSetupStep(2));
+            setupNextButtons.step2.addEventListener('click', handleSetPin);
+            setupNextButtons.step3.addEventListener('click', handleSetupComplete);
+            setupNextButtons.finish.addEventListener('click', () => showView('main-view'));
+
+            // Tabs
+            tabItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const tabId = item.getAttribute('data-tab');
+                    if (tabId) {
+                        showTab(tabId);
+                    }
+                });
+            });
+
+            lockBtn.addEventListener('click', handleLock);
+
+            // Add credential button
+            addCredentialBtn.addEventListener('click', () => showModal('addCredential'));
+            addFirstCredential.addEventListener('click', () => showModal('addCredential'));
+
+            // Add TOTP button
+            addFirstTotp.addEventListener('click', () => showModal('addTotp'));
+
+            // Modal close buttons
+            Object.values(modalCloseButtons).forEach(button => {
+                button.addEventListener('click', () => {
+                    const modalId = Object.keys(modalCloseButtons).find(key => modalCloseButtons[key] === button);
+                    hideModal(modalId);
+                });
+            });
+
+            // Modal cancel buttons
+            Object.values(modalCancelButtons).forEach(button => {
+                button.addEventListener('click', () => {
+                    const modalId = Object.keys(modalCancelButtons).find(key => modalCancelButtons[key] === button);
+                    hideModal(modalId);
+                });
+            });
+
+            // Modal save buttons
+            modalSaveButtons.addCredential.addEventListener('click', handleSaveCredential);
+            modalSaveButtons.editCredential.addEventListener('click', handleUpdateCredential);
+            modalSaveButtons.addTotp.addEventListener('click', handleSaveTotp);
+            modalSaveButtons.changePin.addEventListener('click', handleChangePin);
+            modalSaveButtons.reset.addEventListener('click', handleFactoryReset);
+
+            // Delete credential button
+            modalDeleteButton.addEventListener('click', handleDeleteCredential);
+
+            // Search input
+            document.getElementById('search-input').addEventListener('input', filterCredentials);
+
+            // Password strength
+            document.getElementById('credential-password').addEventListener('input', updatePasswordStrength);
+            document.getElementById('edit-password').addEventListener('input', updateEditPasswordStrength);
+
+            // Settings buttons
+            document.getElementById('change-pin').addEventListener('click', () => showModal('changePin'));
+            document.getElementById('factory-reset').addEventListener('click', () => showModal('reset'));
+
+            // Settings selects
+            setupSelectGroup('autolock-select', handleAutolockChange);
+            setupSelectGroup('attempts-select', handleAttemptsChange);
+            setupSelectGroup('settings-autolock', handleSettingsAutolockChange);
+            setupSelectGroup('settings-attempts', handleSettingsAttemptsChange);
+            setupSelectGroup('digit-select', handleDigitCountChange);
+
+            // Settings toggles
+            document.getElementById('wipe-toggle').addEventListener('change', handleWipeToggle);
+            document.getElementById('settings-wipe').addEventListener('change', handleSettingsWipeToggle);
+            document.getElementById('settings-autotype').addEventListener('change', handleSettingsAutotypeToggle);
+            document.getElementById('settings-touch').addEventListener('change', handleSettingsTouchToggle);
+            document.getElementById('settings-autopopup').addEventListener('change', handleSettingsAutopopupToggle);
+            document.getElementById('settings-passkeys').addEventListener('change', handleSettingsPasskeysToggle);
+        }
+
+        // Request HID device
+        async function requestDevice() {
+            try {
+                const devices = await navigator.hid.requestDevice({
+                    filters: [{ vendorId: 0x1234 }]
+                });
+
+                if (devices.length > 0) {
+                    device = devices[0];
+                    await device.open();
+                    updateConnectionStatus(true);
+                    device.addEventListener('inputreport', handleInputReport);
+                    showView('pin-entry-view');
+                }
+            } catch (error) {
+                console.error('Error requesting device:', error);
+            }
+        }
+
+        // Handle input reports from the device
+        function handleInputReport(event) {
+            const { data, reportId } = event;
+
+            // Convert DataView to Uint8Array
+            const reportData = new Uint8Array(data.buffer);
+
+            switch (reportId) {
+                case 0x01: // PIN entry
+                    handlePinReport(reportData);
+                    break;
+                case 0x02: // Setup or main view
+                    handleSetupOrMainReport(reportData);
+                    break;
+                case 0x05: // Credential list
+                    handleCredentialListReport(reportData);
+                    break;
+                case 0x07: // Settings
+                    handleSettingsReport(reportData);
+                    break;
+                case 0x09: // TOTP code
+                    handleTotpReport(reportData);
+                    break;
+                case 0x0B: // Status update
+                    handleStatusReport(reportData);
+                    break;
+                default:
+                    console.log('Unknown report ID:', reportId);
+            }
+        }
+
+        // Handle PIN entry report
+        function handlePinReport(data) {
+            const attempts = data[0];
+            const locked = data[1] === 1;
+
+            if (locked) {
+                // Device is locked, show appropriate UI
+                pinAttempts.style.display = 'block';
+                attemptsCount.textContent = '0';
+                lockoutWarning.style.display = 'block';
+                pinEntryView.classList.add('shake');
+                setTimeout(() => pinEntryView.classList.remove('shake'), 500);
+            } else {
+                pinAttempts.style.display = 'block';
+                attemptsCount.textContent = attempts;
+                if (attempts <= 3) {
+                    lockoutWarning.style.display = 'block';
+                } else {
+                    lockoutWarning.style.display = 'none';
+                }
+            }
+        }
+
+        // Handle setup or main view report
+        function handleSetupOrMainReport(data) {
+            // Convert the data to a string
+            const textDecoder = new TextDecoder();
+            const payload = textDecoder.decode(data);
+
+            if (payload === 'setup') {
+                showView('setup-wizard-view');
+            } else if (payload === 'main') {
+                showView('main-view');
+                // Request credentials and settings
+                sendReport(0x05, new Uint8Array([0x01])); // Request credentials
+                sendReport(0x07, new Uint8Array([0x01])); // Request settings
+            } else if (payload.startsWith('settings:')) {
+                // Handle settings JSON
+                const settingsJson = payload.substring(9);
+                try {
+                    const newSettings = JSON.parse(settingsJson);
+                    updateSettings(newSettings);
+                } catch (e) {
+                    console.error('Error parsing settings JSON:', e);
+                }
+            }
+        }
+
+        // Handle credential list report
+        function handleCredentialListReport(data) {
+            // First byte is the index, second byte is the total count
+            const index = data[0];
+            const total = data[1];
+
+            // The rest is the credential data (JSON)
+            const credentialData = data.slice(2);
+            const textDecoder = new TextDecoder();
+            const credentialJson = textDecoder.decode(credentialData);
+
+            try {
+                const credential = JSON.parse(credentialJson);
+                credentials[index] = credential;
+
+                // If we've received all credentials, update the UI
+                if (credentials.filter(c => c !== undefined).length === total) {
+                    renderCredentials();
+                }
+            } catch (e) {
+                console.error('Error parsing credential JSON:', e);
+            }
+        }
+
+        // Handle settings report
+        function handleSettingsReport(data) {
+            // The data is the settings JSON
+            const textDecoder = new TextDecoder();
+            const settingsJson = textDecoder.decode(data);
+
+            try {
+                const newSettings = JSON.parse(settingsJson);
+                updateSettings(newSettings);
+            } catch (e) {
+                console.error('Error parsing settings JSON:', e);
+            }
+        }
+
+        // Handle TOTP report
+        function handleTotpReport(data) {
+            // First byte is the index, second byte is the digit count
+            const index = data[0];
+            const digitCount = data[1];
+
+            // The rest is the TOTP code
+            const codeData = data.slice(2);
+            const textDecoder = new TextDecoder();
+            const code = textDecoder.decode(codeData);
+
+            // Update the TOTP code in the UI
+            const totpCards = document.querySelectorAll('.totp-card');
+            if (index < totpCards.length) {
+                const codeElement = totpCards[index].querySelector('.totp-code');
+                if (codeElement) {
+                    codeElement.textContent = code;
+
+                    // Update the timer
+                    const timerText = totpCards[index].querySelector('.timer-text');
+                    if (timerText) {
+                        timerText.textContent = '30';
+                    }
+
+                    // Start the countdown
+                    if (totpInterval) {
+                        clearInterval(totpInterval);
+                    }
+                    let seconds = 30;
+                    totpInterval = setInterval(() => {
+                        seconds--;
+                        if (timerText) {
+                            timerText.textContent = seconds.toString();
+                        }
+                        if (seconds <= 0) {
+                            clearInterval(totpInterval);
+                            // Request a new code
+                            sendReport(0x09, new Uint8Array([index]));
+                        }
+                    }, 1000);
+                }
+            }
+        }
+
+        // Handle status report
+        function handleStatusReport(data) {
+            // First byte is the connection status (0 = disconnected, 1 = connected)
+            const connected = data[0] === 1;
+
+            // Second byte is the lock status (0 = locked, 1 = unlocked)
+            const unlocked = data[1] === 1;
+
+            // The rest is the device state text
+            const stateData = data.slice(2);
+            const textDecoder = new TextDecoder();
+            const stateText = textDecoder.decode(stateData);
+
+            // Update the status bar
+            updateConnectionStatus(connected);
+            statusBar.state.textContent = stateText;
+            statusBar.lockIcon.textContent = unlocked ? '🔓' : '🔒';
+
+            // If disconnected, show reconnect overlay
+            if (!connected) {
+                showReconnectOverlay();
+            } else {
+                hideReconnectOverlay();
+            }
+        }
+
+        // Update connection status in the UI
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                statusBar.dot.classList.add('connected');
+                statusBar.state.textContent = 'Connected';
+            } else {
+                statusBar.dot.classList.remove('connected');
+                statusBar.state.textContent = 'Disconnected';
+            }
+        }
+
+        // Show a specific view
+        function showView(viewId) {
+            // Hide all views
+            Object.values(views).forEach(view => {
+                view.classList.remove('active');
+            });
+
+            // Show the selected view
+            if (views[viewId]) {
+                views[viewId].classList.add('active');
+                currentView = viewId;
+            }
+
+            // Special handling for main view
+            if (viewId === 'main-view') {
+                showTab(currentTab);
+            }
+        }
+
+        // Show a specific setup step
+        function showSetupStep(step) {
+            // Hide all steps
+            Object.values(setupSteps).forEach(step => {
+                step.style.display = 'none';
+            });
+
+            // Show the selected step
+            if (setupSteps[`step${step}`]) {
+                setupSteps[`step${step}`].style.display = 'block';
+            }
+        }
+
+        // Handle PIN digit click
+        function handlePinDigitClick(event) {
+            const digit = event.target.textContent;
+
+            if (digit === '⌫') {
+                // Backspace
+                if (currentPin.length > 0) {
+                    currentPin = currentPin.slice(0, -1);
+                    updatePinIndicators();
+                }
+            } else if (digit === 'Clear') {
+                // Clear
+                currentPin = '';
+                updatePinIndicators();
+            } else {
+                // Number
+                if (currentPin.length < 5) {
+                    currentPin += digit;
+                    updatePinIndicators();
+
+                    // If we have 5 digits, send the PIN
+                    if (currentPin.length === 5) {
+                        sendPin();
+                    }
+                }
+            }
+        }
+
+        // Update PIN indicators
+        function updatePinIndicators() {
+            pinIndicators.forEach((indicator, index) => {
+                if (index < currentPin.length) {
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            });
+        }
+
+        // Send PIN to device
+        function sendPin() {
+            // Convert PIN to bytes
+            const pinBytes = new Uint8Array(5);
+            for (let i = 0; i < 5; i++) {
+                pinBytes[i] = currentPin.charCodeAt(i);
+            }
+
+            // Send report 0x01 with the PIN
+            sendReport(0x01, pinBytes);
+
+            // Clear the PIN
+            currentPin = '';
+            updatePinIndicators();
+        }
+
+        // Handle setting the PIN in setup
+        function handleSetPin() {
+            const setPin = document.getElementById('set-pin').value;
+            const confirmPin = document.getElementById('confirm-pin').value;
+
+            if (setPin !== confirmPin) {
+                document.getElementById('pin-mismatch').style.display = 'block';
+                return;
+            }
+
+            // Send the PIN to the device
+            const pinBytes = new Uint8Array(5);
+            for (let i = 0; i < 5; i++) {
+                pinBytes[i] = setPin.charCodeAt(i);
+            }
+
+            // Send report 0x02 with the PIN
+            sendReport(0x02, pinBytes);
+
+            // Move to next step
+            showSetupStep(3);
+        }
+
+        // Handle setup completion
+        function handleSetupComplete() {
+            // Get all settings
+            const deviceName = document.getElementById('device-name').value;
+            const autolock = document.querySelector('#autolock-select .selected').getAttribute('data-value');
+            const attempts = document.querySelector('#attempts-select .selected').getAttribute('data-value');
+            const wipe = document.getElementById('wipe-toggle').checked;
+
+            // Create settings object
+            const settings = {
+                deviceName,
+                autolock: parseInt(autolock),
+                attempts: parseInt(attempts),
+                wipe
+            };
+
+            // Convert to JSON and send
+            const settingsJson = JSON.stringify(settings);
+            const encoder = new TextEncoder();
+            const settingsBytes = encoder.encode(settingsJson);
+
+            // Send report 0x07 with the settings
+            sendReport(0x07, settingsBytes);
+
+            // Show completion step
+            showSetupStep(4);
+        }
+
+        // Show a specific tab
+        function showTab(tabId) {
+            // Hide all tabs
+            tabContents.forEach(tab => {
+                tab.style.display = 'none';
+            });
+
+            // Remove active class from all tab items
+            tabItems.forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Show the selected tab
+            const selectedTab = document.getElementById(tabId);
+            if (selectedTab) {
+                selectedTab.style.display = 'block';
+                currentTab = tabId;
+            }
+
+            // Add active class to the selected tab item
+            const selectedItem = document.querySelector(`.tab-item[data-tab="${tabId}"]`);
+            if (selectedItem) {
+                selectedItem.classList.add('active');
+            }
+
+            // Special handling for TOTP tab
+            if (tabId === 'totp-tab') {
+                // Request TOTP codes
+                sendReport(0x09, new Uint8Array([0x01])); // Request all TOTP codes
+            }
+        }
+
+        // Handle lock button click
+        function handleLock() {
+            // Send lock command (report 0x03)
+            sendReport(0x03, new Uint8Array([0x01]));
+
+            // Show PIN entry view
+            showView('pin-entry-view');
+        }
+
+        // Show a modal
+        function showModal(modalId) {
+            if (modals[modalId]) {
+                modals[modalId].classList.add('active');
+            }
+        }
+
+        // Hide a modal
+        function hideModal(modalId) {
+            if (modals[modalId]) {
+                modals[modalId].classList.remove('active');
+
+                // Clear form fields
+                if (modalId === 'addCredential') {
+                    document.getElementById('credential-origin').value = '';
+                    document.getElementById('credential-username').value = '';
+                    document.getElementById('credential-password').value = '';
+                    document.getElementById('strength-meter').style.width = '0%';
+                } else if (modalId === 'editCredential') {
+                    document.getElementById('edit-origin').value = '';
+                    document.getElementById('edit-username').value = '';
+                    document.getElementById('edit-password').value = '';
+                    document.getElementById('edit-strength-meter').style.width = '0%';
+                } else if (modalId === 'addTotp') {
+                    document.getElementById('totp-label').value = '';
+                    document.getElementById('totp-secret').value = '';
+                } else if (modalId === 'changePin') {
+                    document.getElementById('current-pin').value = '';
+                    document.getElementById('new-pin').value = '';
+                    document.getElementById('confirm-new-pin').value = '';
+                    document.getElementById('pin-error').style.display = 'none';
+                } else if (modalId === 'reset') {
+                    document.getElementById('reset-confirm').value = '';
+                }
+            }
+        }
+
+        // Handle saving a new credential
+        function handleSaveCredential() {
+            const origin = document.getElementById('credential-origin').value;
+            const username = document.getElementById('credential-username').value;
+            const password = document.getElementById('credential-password').value;
+
+            if (!origin || !username || !password) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Create credential object
+            const credential = {
+                origin,
+                username,
+                password
+            };
+
+            // Convert to JSON and send
+            const credentialJson = JSON.stringify(credential);
+            const encoder = new TextEncoder();
+            const credentialBytes = encoder.encode(credentialJson);
+
+            // Send report 0x05 with the credential
+            sendReport(0x05, credentialBytes);
+
+            // Hide modal
+            hideModal('addCredential');
+
+            // Add to local list and update UI
+            credentials.push(credential);
+            renderCredentials();
+        }
+
+        // Handle updating a credential
+        function handleUpdateCredential() {
+            const origin = document.getElementById('edit-origin').value;
+            const username = document.getElementById('edit-username').value;
+            const password = document.getElementById('edit-password').value;
+
+            if (!origin || !username || !password) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Create updated credential object
+            const updatedCredential = {
+                origin,
+                username,
+                password
+            };
+
+            // Convert to JSON and send
+            const credentialJson = JSON.stringify(updatedCredential);
+            const encoder = new TextEncoder();
+            const credentialBytes = encoder.encode(credentialJson);
+
+            // Send report 0x05 with the updated credential and index
+            const indexBytes = new Uint8Array([currentCredentialIndex]);
+            const reportData = new Uint8Array(indexBytes.length + credentialBytes.length);
+            reportData.set(indexBytes, 0);
+            reportData.set(credentialBytes, indexBytes.length);
+
+            sendReport(0x05, reportData);
+
+            // Hide modal
+            hideModal('editCredential');
+
+            // Update local list and UI
+            credentials[currentCredentialIndex] = updatedCredential;
+            renderCredentials();
+        }
+
+        // Handle deleting a credential
+        function handleDeleteCredential() {
+            if (currentCredentialIndex >= 0 && currentCredentialIndex < credentials.length) {
+                // Send delete command (report 0x05 with index and delete flag)
+                const indexBytes = new Uint8Array([currentCredentialIndex, 0x01]); // 0x01 means delete
+                sendReport(0x05, indexBytes);
+
+                // Remove from local list
+                credentials.splice(currentCredentialIndex, 1);
+
+                // Hide modal
+                hideModal('editCredential');
+
+                // Update UI
+                renderCredentials();
+            }
+        }
+
+        // Handle saving a new TOTP account
+        function handleSaveTotp() {
+            const label = document.getElementById('totp-label').value;
+            const secret = document.getElementById('totp-secret').value;
+            const digitCount = document.querySelector('#digit-select .selected').getAttribute('data-value');
+
+            if (!label || !secret) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Create TOTP account object
+            const totpAccount = {
+                label,
+                secret,
+                digitCount: parseInt(digitCount)
+            };
+
+            // Convert to JSON and send
+            const totpJson = JSON.stringify(totpAccount);
+            const encoder = new TextEncoder();
+            const totpBytes = encoder.encode(totpJson);
+
+            // Send report 0x09 with the TOTP account
+            sendReport(0x09, totpBytes);
+
+            // Hide modal
+            hideModal('addTotp');
+
+            // Add to local list and update UI
+            totpAccounts.push(totpAccount);
+            renderTotpAccounts();
+        }
+
+        // Handle changing the PIN
+        function handleChangePin() {
+            const currentPin = document.getElementById('current-pin').value;
+            const newPin = document.getElementById('new-pin').value;
+            const confirmNewPin = document.getElementById('confirm-new-pin').value;
+
+            if (!currentPin || !newPin || !confirmNewPin) {
+                showPinError('Please fill in all fields');
+                return;
+            }
+
+            if (newPin.length !== 5 || confirmNewPin.length !== 5) {
+                showPinError('PIN must be 5 digits');
+                return;
+            }
+
+            if (newPin !== confirmNewPin) {
+                showPinError('New PINs do not match');
+                return;
+            }
+
+            // Create PIN change object
+            const pinChange = {
+                currentPin,
+                newPin
+            };
+
+            // Convert to JSON and send
+            const pinJson = JSON.stringify(pinChange);
+            const encoder = new TextEncoder();
+            const pinBytes = encoder.encode(pinJson);
+
+            // Send report 0x02 with the PIN change
+            sendReport(0x02, pinBytes);
+
+            // Hide modal
+            hideModal('changePin');
+        }
+
+        // Show PIN error message
+        function showPinError(message) {
+            const errorElement = document.getElementById('pin-error');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+
+        // Handle factory reset
+        function handleFactoryReset() {
+            const confirmText = document.getElementById('reset-confirm').value;
+
+            if (confirmText !== 'RESET') {
+                alert('Please type "RESET" to confirm');
+                return;
+            }
+
+            // Send factory reset command (report 0x04)
+            sendReport(0x04, new Uint8Array([0x01]));
+
+            // Hide modal
+            hideModal('reset');
+
+            // Show connect view
+            showView('connect-view');
+        }
+
+        // Render credentials list
+        function renderCredentials() {
+            credentialsList.innerHTML = '';
+
+            if (credentials.length === 0) {
+                emptyCredentials.style.display = 'block';
+                return;
+            }
+
+            emptyCredentials.style.display = 'none';
+
+            credentials.forEach((credential, index) => {
+                const card = document.createElement('div');
+                card.className = 'card credential-card';
+                card.innerHTML = `
+                    <div class="favicon">🔑</div>
+                    <div class="credential-info">
+                        <div class="credential-origin">${credential.origin}</div>
+                        <div class="credential-username">${credential.username}</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary copy-username" data-index="${index}">Copy Username</button>
+                        <button class="btn btn-secondary copy-password" data-index="${index}">Copy Password</button>
+                        <button class="btn btn-secondary edit-credential" data-index="${index}">Edit</button>
+                    </div>
+                `;
+
+                credentialsList.appendChild(card);
+            });
+
+            // Add event listeners to new buttons
+            document.querySelectorAll('.copy-username').forEach(button => {
+                button.addEventListener('click', handleCopyUsername);
+            });
+
+            document.querySelectorAll('.copy-password').forEach(button => {
+                button.addEventListener('click', handleCopyPassword);
+            });
+
+            document.querySelectorAll('.edit-credential').forEach(button => {
+                button.addEventListener('click', handleEditCredential);
+            });
+        }
+
+        // Handle copying username
+        function handleCopyUsername(event) {
+            const index = parseInt(event.target.getAttribute('data-index'));
+            if (index >= 0 && index < credentials.length) {
+                const username = credentials[index].username;
+                navigator.clipboard.writeText(username).then(() => {
+                    // Show success feedback
+                    event.target.textContent = 'Copied!';
+                    setTimeout(() => {
+                        event.target.textContent = 'Copy Username';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy username:', err);
+                });
+
+                // Send copy username command (report 0x0A)
+                sendReport(0x0A, new Uint8Array([index, 0x01])); // 0x01 means username
+            }
+        }
+
+        // Handle copying password
+        function handleCopyPassword(event) {
+            const index = parseInt(event.target.getAttribute('data-index'));
+            if (index >= 0 && index < credentials.length) {
+                const password = credentials[index].password;
+                navigator.clipboard.writeText(password).then(() => {
+                    // Show success feedback
+                    event.target.textContent = 'Copied!';
+                    setTimeout(() => {
+                        event.target.textContent = 'Copy Password';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy password:', err);
+                });
+
+                // Send copy password command (report 0x0A)
+                sendReport(0x0A, new Uint8Array([index, 0x02])); // 0x02 means password
+            }
+        }
+
+        // Handle editing credential
+        function handleEditCredential(event) {
+            const index = parseInt(event.target.getAttribute('data-index'));
+            if (index >= 0 && index < credentials.length) {
+                currentCredentialIndex = index;
+                const credential = credentials[index];
+
+                // Fill the edit modal
+                document.getElementById('edit-origin').value = credential.origin;
+                document.getElementById('edit-username').value = credential.username;
+                document.getElementById('edit-password').value = credential.password;
+
+                // Update password strength
+                updateEditPasswordStrength();
+
+                // Show the modal
+                showModal('editCredential');
+            }
+        }
+
+        // Filter credentials based on search input
+        function filterCredentials() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+
+            if (!searchTerm) {
+                renderCredentials();
+                return;
+            }
+
+            const filteredCredentials = credentials.filter(credential =>
+                credential.origin.toLowerCase().includes(searchTerm) ||
+                credential.username.toLowerCase().includes(searchTerm)
+            );
+
+            // Render filtered credentials
+            credentialsList.innerHTML = '';
+
+            if (filteredCredentials.length === 0) {
+                emptyCredentials.style.display = 'block';
+                return;
+            }
+
+            emptyCredentials.style.display = 'none';
+
+            filteredCredentials.forEach((credential, index) => {
+                const card = document.createElement('div');
+                card.className = 'card credential-card';
+                card.innerHTML = `
+                    <div class="favicon">🔑</div>
+                    <div class="credential-info">
+                        <div class="credential-origin">${credential.origin}</div>
+                        <div class="credential-username">${credential.username}</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary copy-username" data-index="${index}">Copy Username</button>
+                        <button class="btn btn-secondary copy-password" data-index="${index}">Copy Password</button>
+                        <button class="btn btn-secondary edit-credential" data-index="${index}">Edit</button>
+                    </div>
+                `;
+
+                credentialsList.appendChild(card);
+            });
+
+            // Add event listeners to new buttons
+            document.querySelectorAll('.copy-username').forEach(button => {
+                button.addEventListener('click', handleCopyUsername);
+            });
+
+            document.querySelectorAll('.copy-password').forEach(button => {
+                button.addEventListener('click', handleCopyPassword);
+            });
+
+            document.querySelectorAll('.edit-credential').forEach(button => {
+                button.addEventListener('click', handleEditCredential);
+            });
+        }
+
+        // Render TOTP accounts list
+        function renderTotpAccounts() {
+            totpList.innerHTML = '';
+
+            if (totpAccounts.length === 0) {
+                emptyTotp.style.display = 'block';
+                return;
+            }
+
+            emptyTotp.style.display = 'none';
+
+            totpAccounts.forEach((account, index) => {
+                const card = document.createElement('div');
+                card.className = 'card totp-card';
+                card.innerHTML = `
+                    <div class="totp-label">${account.label}</div>
+                    <div class="totp-code">------</div>
+                    <div class="totp-timer">
+                        <svg class="timer-svg" viewBox="0 0 20 20">
+                            <circle cx="10" cy="10" r="9" fill="none" stroke="#333" stroke-width="2"></circle>
+                            <path fill="none" stroke="#4A9EFF" stroke-width="2" stroke-linecap="round" d="M10 10 L10 5"></path>
+                        </svg>
+                        <div class="timer-text">30</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary copy-totp" data-index="${index}">Copy Code</button>
+                        <button class="btn btn-secondary delete-totp" data-index="${index}">Delete</button>
+                    </div>
+                `;
+
+                totpList.appendChild(card);
+            });
+
+            // Add event listeners to new buttons
+            document.querySelectorAll('.copy-totp').forEach(button => {
+                button.addEventListener('click', handleCopyTotp);
+            });
+
+            document.querySelectorAll('.delete-totp').forEach(button => {
+                button.addEventListener('click', handleDeleteTotp);
+            });
+
+            // Request TOTP codes
+            sendReport(0x09, new Uint8Array([0x01])); // Request all TOTP codes
+        }
+
+        // Handle copying TOTP code
+        function handleCopyTotp(event) {
+            const index = parseInt(event.target.getAttribute('data-index'));
+            if (index >= 0 && index < totpAccounts.length) {
+                // Get the code from the UI
+                const totpCards = document.querySelectorAll('.totp-card');
+                if (index < totpCards.length) {
+                    const codeElement = totpCards[index].querySelector('.totp-code');
+                    if (codeElement) {
+                        const code = codeElement.textContent;
+
+                        // Copy to clipboard
+                        navigator.clipboard.writeText(code).then(() => {
+                            // Show success feedback
+                            event.target.textContent = 'Copied!';
+                            setTimeout(() => {
+                                event.target.textContent = 'Copy Code';
+                            }, 2000);
+                        }).catch(err => {
+                            console.error('Failed to copy TOTP code:', err);
+                        });
+
+                        // Send copy TOTP command (report 0x08)
+                        sendReport(0x08, new Uint8Array([index]));
+                    }
+                }
+            }
+        }
+
+        // Handle deleting TOTP account
+        function handleDeleteTotp(event) {
+            const index = parseInt(event.target.getAttribute('data-index'));
+            if (index >= 0 && index < totpAccounts.length) {
+                // Send delete command (report 0x09 with index and delete flag)
+                const indexBytes = new Uint8Array([index, 0x01]); // 0x01 means delete
+                sendReport(0x09, indexBytes);
+
+                // Remove from local list
+                totpAccounts.splice(index, 1);
+
+                // Update UI
+                renderTotpAccounts();
+            }
+        }
+
+        // Update password strength indicator
+        function updatePasswordStrength() {
+            const password = document.getElementById('credential-password').value;
+            const strengthMeter = document.getElementById('strength-meter');
+
+            if (!password) {
+                strengthMeter.style.width = '0%';
+                return;
+            }
+
+            // Simple strength calculation
+            let strength = 0;
+
+            // Length
+            if (password.length >= 8) strength += 20;
+            if (password.length >= 12) strength += 20;
+
+            // Character variety
+            if (/[a-z]/.test(password)) strength += 10;
+            if (/[A-Z]/.test(password)) strength += 10;
+            if (/\d/.test(password)) strength += 10;
+            if (/[^a-zA-Z0-9]/.test(password)) strength += 10;
+
+            // Cap at 100
+            strength = Math.min(strength, 100);
+
+            // Update meter
+            strengthMeter.style.width = `${strength}%`;
+
+            // Change color based on strength
+            if (strength < 40) {
+                strengthMeter.style.backgroundColor = 'var(--error-color)';
+            } else if (strength < 70) {
+                strengthMeter.style.backgroundColor = 'var(--warning-color)';
+            } else {
+                strengthMeter.style.backgroundColor = 'var(--success-color)';
+            }
+        }
+
+        // Update edit password strength indicator
+        function updateEditPasswordStrength() {
+            const password = document.getElementById('edit-password').value;
+            const strengthMeter = document.getElementById('edit-strength-meter');
+
+            if (!password) {
+                strengthMeter.style.width = '0%';
+                return;
+            }
+
+            // Simple strength calculation
+            let strength = 0;
+
+            // Length
+            if (password.length >= 8) strength += 20;
+            if (password.length >= 12) strength += 20;
+
+            // Character variety
+            if (/[a-z]/.test(password)) strength += 10;
+            if (/[A-Z]/.test(password)) strength += 10;
+            if (/\d/.test(password)) strength += 10;
+            if (/[^a-zA-Z0-9]/.test(password)) strength += 10;
+
+            // Cap at 100
+            strength = Math.min(strength, 100);
+
+            // Update meter
+            strengthMeter.style.width = `${strength}%`;
+
+            // Change color based on strength
+            if (strength < 40) {
+                strengthMeter.style.backgroundColor = 'var(--error-color)';
+            } else if (strength < 70) {
+                strengthMeter.style.backgroundColor = 'var(--warning-color)';
+            } else {
+                strengthMeter.style.backgroundColor = 'var(--success-color)';
+            }
+        }
+
+        // Update settings in the UI
+        function updateSettings(newSettings) {
+            settings = newSettings;
+
+            // Update security settings
+            const autolockSelect = document.querySelector('#settings-autolock .select-item[data-value="' + settings.autolock + '"]');
+            if (autolockSelect) {
+                document.querySelectorAll('#settings-autolock .select-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                autolockSelect.classList.add('selected');
+            }
+
+            const attemptsSelect = document.querySelector('#settings-attempts .select-item[data-value="' + settings.attempts + '"]');
+            if (attemptsSelect) {
+                document.querySelectorAll('#settings-attempts .select-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                attemptsSelect.classList.add('selected');
+            }
+
+            document.getElementById('settings-wipe').checked = settings.wipe;
+
+            // Update behavior settings
+            document.getElementById('settings-autotype').checked = settings.autotype;
+            document.getElementById('settings-touch').checked = settings.touch;
+            document.getElementById('settings-autopopup').checked = settings.autopopup;
+            document.getElementById('settings-passkeys').checked = settings.passkeys;
+
+            // Update device info
+            document.querySelector('.form-control').textContent = settings.firmwareVersion || '1.0.0';
+        }
+
+        // Handle autolock change in setup
+        function handleAutolockChange(selectedValue) {
+            // No action needed, just update the selected item
+            document.querySelectorAll('#autolock-select .select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector('#autolock-select .select-item[data-value="' + selectedValue + '"]');
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+        }
+
+        // Handle attempts change in setup
+        function handleAttemptsChange(selectedValue) {
+            // No action needed, just update the selected item
+            document.querySelectorAll('#attempts-select .select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector('#attempts-select .select-item[data-value="' + selectedValue + '"]');
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+        }
+
+        // Handle autolock change in settings
+        function handleSettingsAutolockChange(selectedValue) {
+            // Update settings
+            settings.autolock = parseInt(selectedValue);
+
+            // Send updated settings
+            sendSettingsUpdate();
+
+            // Update UI
+            document.querySelectorAll('#settings-autolock .select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector('#settings-autolock .select-item[data-value="' + selectedValue + '"]');
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+        }
+
+        // Handle attempts change in settings
+        function handleSettingsAttemptsChange(selectedValue) {
+            // Update settings
+            settings.attempts = parseInt(selectedValue);
+
+            // Send updated settings
+            sendSettingsUpdate();
+
+            // Update UI
+            document.querySelectorAll('#settings-attempts .select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector('#settings-attempts .select-item[data-value="' + selectedValue + '"]');
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+        }
+
+        // Handle digit count change in TOTP
+        function handleDigitCountChange(selectedValue) {
+            // No action needed, just update the selected item
+            document.querySelectorAll('#digit-select .select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const selectedItem = document.querySelector('#digit-select .select-item[data-value="' + selectedValue + '"]');
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+        }
+
+        // Handle wipe toggle in setup
+        function handleWipeToggle() {
+            // No action needed, just update the settings
+            settings.wipe = this.checked;
+        }
+
+        // Handle wipe toggle in settings
+        function handleSettingsWipeToggle() {
+            // Update settings
+            settings.wipe = this.checked;
+
+            // Send updated settings
+            sendSettingsUpdate();
+        }
+
+        // Handle autotype toggle in settings
+        function handleSettingsAutotypeToggle() {
+            // Update settings
+            settings.autotype = this.checked;
+
+            // Send updated settings
+            sendSettingsUpdate();
+        }
+
+        // Handle touch toggle in settings
+        function handleSettingsTouchToggle() {
+            // Update settings
+            settings.touch = this.checked;
+
+            // Send updated settings
+            sendSettingsUpdate();
+        }
+
+        // Handle autopopup toggle in settings
+        function handleSettingsAutopopupToggle() {
+            // Update settings
+            settings.autopopup = this.checked;
+
+            // Send updated settings
+            sendSettingsUpdate();
+        }
+
+        // Handle passkeys toggle in settings
+        function handleSettingsPasskeysToggle() {
+            // Update settings
+            settings.passkeys = this.checked;
+
+            // Send updated settings
+            sendSettingsUpdate();
+        }
+
+        // Send updated settings to device
+        function sendSettingsUpdate() {
+            // Convert settings to JSON and send
+            const settingsJson = JSON.stringify(settings);
+            const encoder = new TextEncoder();
+            const settingsBytes = encoder.encode(settingsJson);
+
+            // Send report 0x07 with the settings
+            sendReport(0x07, settingsBytes);
+        }
+
+        // Set up select group event listeners
+        function setupSelectGroup(groupId, callback) {
+            const group = document.getElementById(groupId);
+            if (!group) return;
+
+            const items = group.querySelectorAll('.select-item');
+
+            items.forEach(item => {
+                item.addEventListener('click', function() {
+                    // Remove selected class from all items
+                    items.forEach(i => i.classList.remove('selected'));
+
+                    // Add selected class to clicked item
+                    this.classList.add('selected');
+
+                    // Get the selected value
+                    const selectedValue = this.getAttribute('data-value');
+
+                    // Call the callback with the selected value
+                    if (callback) {
+                        callback(selectedValue);
+                    }
+                });
+            });
+        }
+
+        // Send a report to the device
+        function sendReport(reportId, data) {
+            if (!device || !device.opened) {
+                console.error('Device not connected');
+                return;
+            }
+
+            try {
+                device.sendReport(reportId, data);
+            } catch (error) {
+                console.error('Error sending report:', error);
+            }
+        }
+
+        // Show reconnect overlay
+        function showReconnectOverlay() {
+            reconnectOverlay.classList.add('active');
+            reconnectAttempts = 0;
+            attemptReconnect();
+        }
+
+        // Hide reconnect overlay
+        function hideReconnectOverlay() {
+            reconnectOverlay.classList.remove('active');
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+            }
+        }
+
+        // Attempt to reconnect to the device
+        function attemptReconnect() {
+            if (reconnectAttempts >= 5) {
+                // Too many attempts, show error
+                reconnectOverlay.innerHTML = `
+                    <div class="reconnect-text">Failed to reconnect to device</div>
+                    <button class="btn" id="retry-reconnect">Retry</button>
+                `;
+                document.getElementById('retry-reconnect').addEventListener('click', () => {
+                    reconnectOverlay.innerHTML = `
+                        <div class="spinner"></div>
+                        <div class="reconnect-text">Reconnecting to device...</div>
+                    `;
+                    reconnectAttempts = 0;
+                    attemptReconnect();
+                });
+                return;
+            }
+
+            // Try to reconnect
+            navigator.hid.getDevices().then(devices => {
+                const matchingDevice = devices.find(d => d.vendorId === 0x1234);
+
+                if (matchingDevice) {
+                    // Found the device, try to connect
+                    matchingDevice.open().then(() => {
+                        device = matchingDevice;
+                        updateConnectionStatus(true);
+                        device.addEventListener('inputreport', handleInputReport);
+                        hideReconnectOverlay();
+
+                        // Request current state
+                        sendReport(0x0B, new Uint8Array([0x01])); // Request status
+                    }).catch(error => {
+                        console.error('Error opening device:', error);
+                        reconnectAttempts++;
+                        setTimeout(attemptReconnect, 2000);
+                    });
+                } else {
+                    // Device not found, try again
+                    reconnectAttempts++;
+                    setTimeout(attemptReconnect, 2000);
+                }
+            }).catch(error => {
+                console.error('Error getting devices:', error);
+                reconnectAttempts++;
+                setTimeout(attemptReconnect, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
