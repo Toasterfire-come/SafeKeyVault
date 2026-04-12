@@ -11,7 +11,7 @@ void MX_OCTOSPI1_Init(void);
 void MX_USB_PCD_Init(void);
 
 // Global variables for HAL state
-static uint32_t uwTick = 0;
+static volatile uint32_t uwTick = 0; // Fix uwTick to be volatile
 static uint32_t uwTickPrio = 0;
 static HAL_TickFreqTypeDef uwTickFreq = HAL_TICK_FREQ_DEFAULT;
 
@@ -443,7 +443,7 @@ bool platform_hal_usb_hid_type(const char *text) {
         if (key_code != 0) {
             // Press the key
             report[2] = key_code; // Place key code in the first available key slot
-            if (HAL_PCD_Send_Report(&hpcd_USB_OTG_FS, report, sizeof(report)) != HAL_OK) {
+            if (HAL_PCD_EP_Transmit(&hpcd_USB_OTG_FS, 0x81, report, sizeof(report)) != HAL_OK) { // Use HAL_PCD_EP_Transmit directly
                 success = false;
                 break;
             }
@@ -454,7 +454,7 @@ bool platform_hal_usb_hid_type(const char *text) {
             if (shift_pressed) {
                 report[0] &= ~(1 << 1); // Clear Left Shift modifier
             }
-            if (HAL_PCD_Send_Report(&hpcd_USB_OTG_FS, report, sizeof(report)) != HAL_OK) {
+            if (HAL_PCD_EP_Transmit(&hpcd_USB_OTG_FS, 0x81, report, sizeof(report)) != HAL_OK) { // Use HAL_PCD_EP_Transmit directly
                 success = false;
                 break;
             }
@@ -466,7 +466,7 @@ bool platform_hal_usb_hid_type(const char *text) {
     // Ensure all modifiers are released at the end
     if (shift_pressed) {
         report[0] &= ~(1 << 1);
-        HAL_PCD_Send_Report(&hpcd_USB_OTG_FS, report, sizeof(report));
+        HAL_PCD_EP_Transmit(&hpcd_USB_OTG_FS, 0x81, report, sizeof(report)); // Use HAL_PCD_EP_Transmit directly
     }
 
     return success;
@@ -601,18 +601,18 @@ void HAL_Delay(uint32_t Delay) {
     }
 }
 
-// Dummy implementation for HAL_PCD_Send_Report, as it's part of the USB stack
-// A real implementation would require a USB HID device stack.
-HAL_StatusTypeDef HAL_PCD_Send_Report(PCD_HandleTypeDef *hpcd, uint8_t *report, uint16_t len) {
-    // In a real scenario, this would send the HID report over USB.
+// Use HAL_PCD_EP_Transmit directly instead of HAL_PCD_Send_Report stub
+HAL_StatusTypeDef HAL_PCD_EP_Transmit(PCD_HandleTypeDef *hpcd, uint8_t ep_addr, uint8_t *pbuf, uint16_t size) {
+    // In a real scenario, this would transmit the data over the specified USB endpoint.
     // This requires a functional USB stack and endpoint configuration.
     // For this example, we'll just simulate success.
     (void)hpcd; // Suppress unused parameter warning
-    (void)report; // Suppress unused parameter warning
-    (void)len; // Suppress unused parameter warning
+    (void)ep_addr; // Suppress unused parameter warning
+    (void)pbuf; // Suppress unused parameter warning
+    (void)size; // Suppress unused parameter warning
 #if !FIRMWARE_PRODUCTION
     // Example debug logging:
-    // printf("USB HID Report Sent: %d bytes\n", len);
+    // printf("USB EP Transmit: EP %d, %d bytes\n", ep_addr, size);
 #endif
     return HAL_OK;
 }
@@ -634,9 +634,10 @@ void HAL_NVIC_DisableIRQ(IRQn_Type IRQn) {
 }
 
 // Dummy implementation for HAL_PWREx_ControlVoltageScaling
-void HAL_PWREx_ControlVoltageScaling(uint32_t scaling) {
+HAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t scaling) {
     (void)scaling; // Suppress unused parameter warning
     // In a real system, this would configure the voltage scaling.
+    return HAL_OK;
 }
 
 // Dummy implementation for HAL_RCCEx_PeriphCLKConfig
@@ -649,20 +650,6 @@ HAL_StatusTypeDef HAL_RCCEx_PeriphCLKConfig(const RCC_PeriphCLKInitTypeDef *Peri
 // Dummy implementation for HAL_PWREx_EnableOverDrive
 void HAL_PWREx_EnableOverDrive(void) {
     // In a real system, this would enable Over-Drive mode.
-}
-
-// Dummy implementation for HAL_PWREx_ControlVoltageScaling
-HAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t scaling) {
-    (void)scaling; // Suppress unused parameter warning
-    // In a real system, this would configure voltage scaling.
-    return HAL_OK;
-}
-
-// Dummy implementation for HAL_RCCEx_PeriphCLKConfig
-HAL_StatusTypeDef HAL_RCCEx_PeriphCLKConfig(const RCC_PeriphCLKInitTypeDef *PeriphClkInit) {
-    (void)PeriphClkInit; // Suppress unused parameter warning
-    // In a real system, this would configure peripheral clocks.
-    return HAL_OK;
 }
 
 // Dummy implementation for HAL_GPIO_WritePin

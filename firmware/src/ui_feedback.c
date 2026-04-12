@@ -26,6 +26,11 @@ static ui_led_pattern_t ui_led_for_state(device_state_t state, const ActionResul
   if (action != NULL && !action->allowed && !action->touch_required) {
     return UI_LED_ERROR_BLINK;
   }
+  // Handle action == NULL gracefully for idle path
+  if (action == NULL && state == DEVICE_UNLOCKED) {
+      return UI_LED_UNLOCKED_SOLID;
+  }
+  // Default for other states or if action is NULL and not unlocked
   return UI_LED_UNLOCKED_SOLID;
 }
 
@@ -38,28 +43,40 @@ void ui_feedback_from_state(const device_context_t *ctx,
   memset(out_status, 0, sizeof(*out_status));
   out_status->led = UI_LED_OFF;
 
-  if (ctx == NULL || action == NULL) {
+  // Handle ctx == NULL gracefully
+  if (ctx == NULL) {
     (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
                    "status unavailable");
     return;
   }
 
   out_status->led = ui_led_for_state(ctx->state, action);
-  out_status->show_touch_hint = action->touch_required;
-  out_status->show_hold_hint = action->touch_required &&
+  out_status->show_touch_hint = action != NULL && action->touch_required;
+  out_status->show_hold_hint = action != NULL && action->touch_required &&
                                (strstr(action->message, "hold") != NULL);
 
-  if (action->performed) {
-    (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
-                   "action complete: %s", action->message);
-  } else if (action->touch_required) {
-    (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
-                   "waiting for touch: %s", action->message);
-  } else if (action->allowed) {
-    (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
-                   "ready: %s", action->message);
+  if (action != NULL) {
+      if (action->performed) {
+        (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                       "action complete: %s", action->message);
+      } else if (action->touch_required) {
+        (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                       "waiting for touch: %s", action->message);
+      } else if (action->allowed) {
+        (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                       "ready: %s", action->message);
+      } else {
+        (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                       "blocked: %s", action->message);
+      }
   } else {
-    (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
-                   "blocked: %s", action->message);
+      // Idle path when action is NULL
+      if (ctx->state == DEVICE_UNLOCKED) {
+          (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                         "unlocked");
+      } else {
+          (void)snprintf(out_status->status_text, sizeof(out_status->status_text),
+                         "locked");
+      }
   }
 }

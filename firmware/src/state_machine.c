@@ -8,11 +8,11 @@
 #include "crypto_engine.h"
 #include "password_store.h"
 #include "security_utils.h"
-#include "pcd_hal.h" // Assuming PCD HAL for USB disconnect handling
 #include "build_config.h" // For FIRMWARE_PRODUCTION
 
 #define LOCKOUT_TICKS_BASE 3u
 #define LOCKOUT_TICKS_STEP 2u
+#define MAX_PIN_FAILURES_BEFORE_WIPE 10 // Define a constant for wipe threshold
 
 static runtime_settings_t g_settings = {
     .auto_popup_enabled = true,
@@ -25,10 +25,6 @@ static runtime_settings_t g_settings = {
 };
 static uint8_t g_pin_verifier[16];
 static bool g_pin_verifier_set = false;
-
-// Assume g_device_context is a global variable accessible by state_machine_on_usb_disconnect
-// In a real application, this might be passed as a parameter or managed differently.
-extern device_context_t g_device_context;
 
 static void reset_unlock_session(device_context_t *ctx) {
     ctx->unlocked = false;
@@ -46,9 +42,7 @@ void state_machine_init(device_context_t *ctx) {
     ctx->state = DEVICE_LOCKED;
 
     // Initialize hardware drivers
-    pcd_hal_init();
-    // Register callback for USB disconnect
-    pcd_hal_register_callback(state_machine_on_usb_disconnect);
+    platform_hal_init(); // Initialize platform HAL
 }
 
 void state_machine_tick(device_context_t *ctx) {
@@ -138,17 +132,17 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         return false;
     }
 
-    if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
-        security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
-        return false;
-    }
-
-    // PIN verifier must be set. If not, we cannot proceed.
+    // Ensure g_pin_verifier_set check is first
     if (!g_pin_verifier_set) {
 #if !FIRMWARE_PRODUCTION
         // Example debug logging:
         // printf("State Machine: PIN verifier not set, cannot unlock.\n");
 #endif
+        security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
+        return false;
+    }
+
+    if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
         security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
         return false;
     }
@@ -164,7 +158,7 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
 
     if (pin_len == PIN_DIGITS && all_digits &&
         sec_consttime_memeq(candidate, g_pin_verifier, sizeof(candidate))) {
-        
+
         ctx->failed_pin_attempts = 0u;
         ctx->lockout_ticks_remaining = 0u;
         ctx->unlocked = true;
@@ -175,7 +169,8 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
         ctx->failed_pin_attempts++;
         reset_unlock_session(ctx);
 
-        if (g_settings.wipe_on_lockout && ctx->failed_pin_attempts >= g_settings.pin_attempt_limit) {
+        // Fix wipe threshold to use MAX_PIN_FAILURES_BEFORE_WIPE
+        if (g_settings.wipe_on_lockout && ctx->failed_pin_attempts >= MAX_PIN_FAILURES_BEFORE_WIPE) {
             ctx->wiped = true;
             ctx->state = DEVICE_LOCKED_OUT;
             ctx->lockout_ticks_remaining = 0u;
@@ -411,14 +406,6 @@ void state_machine_set_pin_verifier(const uint8_t verifier[16]) {
     }
     memcpy(g_pin_verifier, verifier, 16u);
     g_pin_verifier_set = true;
-}
-
-void state_machine_on_usb_disconnect(void) {
-    // When USB disconnects, immediately lock the device.
-    // This assumes 'g_device_context' is a globally accessible device_context_t.
-    // If not, this function needs to be passed the context or have it accessible.
-    // For now, assuming a global context for simplicity.
-    state_machine_lock(&g_device_context);
 }
 
 void state_machine_lock(device_context_t *ctx) {

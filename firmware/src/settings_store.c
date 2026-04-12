@@ -71,11 +71,14 @@ void settings_store_init(void) {
   size_t i;
   memset(&g_settings_store, 0, sizeof(g_settings_store));
   storage_backend_init();
-  // Wipe storage on init to ensure a clean state, especially for tests.
-  // In production, this might be conditional or handled by a separate factory reset.
-  storage_backend_wipe();
+  // Remove storage_backend_wipe() call from settings_store_init
+  // storage_backend_wipe();
   crypto_engine_init();
+
+  // Guard dev key material with #if !FIRMWARE_PRODUCTION
+#if !FIRMWARE_PRODUCTION
   crypto_engine_set_master_key(default_master_key, sizeof(default_master_key));
+#endif
   for (i = 0u; i < sizeof(device_secret); ++i) {
     device_secret[i] = (uint8_t)(0xA5u ^ (uint8_t)(i * 13u));
   }
@@ -328,4 +331,3 @@ bool settings_store_debug_restore(const settings_blob_t *blob,
   return true;
 #endif
 }
-

@@ -17,13 +17,12 @@
 
 // Forward declarations for HAL and SystemClock_Config
 extern void SystemClock_Config(void);
-extern void MX_USB_Device_Init(void); // Assuming this is the USB device initialization function
+extern void MX_USB_PCD_Init(void); // Use the correct USB initialization function
 
 // Global variables for device state and settings
 static device_context_t g_device_ctx;
 static runtime_settings_t g_runtime_settings;
 static totp_store_t g_totp_store;
-static usb_session_state_t g_usb_session_state;
 
 // Placeholder for a function to get the pending credential and origin for typing
 // This needs to be implemented based on how the state machine manages pending actions.
@@ -39,13 +38,6 @@ bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t
 void state_machine_on_usb_connect(device_context_t *ctx) {
     // Logic to handle USB connection event
     // e.g., reset session state, potentially trigger authentication
-    (void)ctx;
-}
-
-// Placeholder for a function to handle USB disconnection event
-void state_machine_on_usb_disconnect(device_context_t *ctx) {
-    // Logic to handle USB disconnection event
-    // e.g., clear session, potentially lock device
     (void)ctx;
 }
 
@@ -87,12 +79,6 @@ void SystemClock_Config(void) {
     // HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_X);
 }
 
-// Placeholder for MX_USB_Device_Init
-void MX_USB_Device_Init(void) {
-    // Implement USB Device initialization
-    // This typically involves configuring USB peripherals and enabling interrupts
-}
-
 int main(void) {
     // Initialize HAL
     if (HAL_Init() != HAL_OK) {
@@ -131,7 +117,7 @@ int main(void) {
 
     // Initialize USB session
     usb_session_init();
-    MX_USB_Device_Init(); // Initialize USB peripheral
+    MX_USB_PCD_Init(); // Initialize USB peripheral
 
     // Initialize state machine
     state_machine_init(&g_device_ctx);
@@ -150,21 +136,23 @@ int main(void) {
         // Handle touch input
         platform_hal_status_t hal_status;
         if (platform_hal_get_status(&hal_status)) {
-            if (hal_status.touch_pressed) {
-                state_machine_on_touch_tap(&g_device_ctx);
-            } else if (hal_status.touch_held) {
+            // Hold priority checked first
+            if (hal_status.touch_held) {
                 state_machine_on_touch_hold(&g_device_ctx);
+            } else if (hal_status.touch_pressed) {
+                state_machine_on_touch_tap(&g_device_ctx);
             }
         }
 
         // Handle USB connection/disconnection
-        bool usb_connected_curr = usb_session_is_authenticated(); // Assuming this checks connection status
+        bool usb_connected_curr = usb_session_is_connected(); // Assuming this checks connection status
         static bool usb_connected_prev = false; // Initialize static variable
 
         if (usb_connected_curr && !usb_connected_prev) {
             // USB just connected
             state_machine_on_usb_connect(&g_device_ctx);
-            if (g_runtime_settings.auto_type_on_plugin && g_device_ctx.unlocked) {
+            usb_session_start(); // Start the USB session
+            if (g_runtime_settings.auto_popup_enabled && g_device_ctx.unlocked) {
                 // Trigger autofill for default account if settings allow
                 // This part requires more context on how to select the default account and trigger autofill
                 // For now, we'll assume a placeholder function or logic.
@@ -175,23 +163,28 @@ int main(void) {
             }
         } else if (!usb_connected_curr && usb_connected_prev) {
             // USB just disconnected
-            state_machine_on_usb_disconnect(&g_device_ctx);
+            state_machine_lock(&g_device_ctx); // Lock the device directly
             usb_session_end(); // End the USB session
         }
         usb_connected_prev = usb_connected_curr;
 
 
         // Check for pending actions and update UI feedback
-        if (g_device_ctx.state == DEVICE_CONFIRM_TYPE) {
+        ui_status_t ui_status;
+        ui_feedback_from_state(&g_device_ctx, NULL, &ui_status); // Pass ui_status pointer
+
+        // Implement autofill logic here based on state and UI feedback
+        if (g_device_ctx.state == DEVICE_CONFIRM_TYPE && ui_status.show_hold_hint) {
             credential_record_t pending_credential;
-            char pending_origin[MAX_ORIGIN_LEN]; // Use MAX_ORIGIN_LEN from firmware_types.h
+            char pending_origin[MAX_ORIGIN_LEN];
             if (state_machine_get_pending_action(&g_device_ctx, &pending_credential, pending_origin, sizeof(pending_origin))) {
                 usb_session_type_credentials(&pending_credential, pending_origin);
             }
         }
 
         // Update LED state based on device context
-        ui_feedback_from_state(&g_device_ctx, NULL); // Assuming ActionResult is not needed here for LED state
+        platform_hal_led_set(PLATFORM_HAL_LED_LOCKED, g_device_ctx.state == DEVICE_LOCKED || g_device_ctx.state == DEVICE_LOCKED_OUT);
+        platform_hal_led_set(PLATFORM_HAL_LED_ACTIVITY, ui_status.led == UI_LED_TYPING_ACTIVE); // Example for activity LED
 
         // Add a small delay or yield if necessary to prevent busy-waiting
         // HAL_Delay(1); // Example delay

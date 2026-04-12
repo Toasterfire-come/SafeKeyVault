@@ -35,5 +35,6 @@ unsigned int state_machine_lockout_remaining(const device_context_t *ctx);
 void state_machine_apply_settings(const runtime_settings_t *settings);
 void state_machine_get_settings(runtime_settings_t *out_settings);
 void state_machine_set_pin_verifier(const uint8_t verifier[16]);
+void state_machine_lock(device_context_t *ctx); // Add state_machine_lock declaration
 
 #endif

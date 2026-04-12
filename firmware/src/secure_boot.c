@@ -64,7 +64,7 @@ static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN])
 // Function to read the firmware version from the ATECC608A slot
 static bool read_version_from_atecc(uint32_t *version) {
     uint8_t version_data[VERSION_COUNTER_LEN];
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antiroolback) {
+    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
         return false;
     }
 
@@ -82,7 +82,7 @@ static bool read_version_from_atecc(uint32_t *version) {
 // Function to write the firmware version to the ATECC608A slot
 static bool write_version_to_atecc(uint32_t version) {
     uint8_t version_data[VERSION_COUNTER_LEN];
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antiroolback) {
+    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
         return false;
     }
 
@@ -103,7 +103,7 @@ void secure_boot_init(void) {
   g_secure_boot.initialized = true;
   // Initialize policy with defaults, can be overridden by secure_boot_set_policy
   g_secure_boot.policy.enforce_signature = true;
-  g_secure_boot.policy.enforce_antiroolback = true;
+  g_secure_boot.policy.enforce_antirollback = true; // Fix typo enforce_antiroolback -> enforce_antirollback
   g_secure_boot.policy.min_allowed_version = 0; // No minimum by default
 
   // Initialize hardware drivers
@@ -200,7 +200,7 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   }
 
   // 2. Verify Anti-Rollback Counter
-  if (g_secure_boot.policy.enforce_antiroolback) {
+  if (g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
     // Read the stored version from ATECC608A slot 7
     if (read_version_from_atecc(&stored_version)) {
         // Check if the manifest version is greater than or equal to the stored version
@@ -229,7 +229,7 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
   out_result->accepted = out_result->signature_valid && out_result->antirollback_ok;
 
   // If the new firmware is accepted, update the version counter in ATECC
-  if (out_result->accepted && g_secure_boot.policy.enforce_antiroolback) {
+  if (out_result->accepted && g_secure_boot.policy.enforce_antirollback) { // Fix typo enforce_antiroolback -> enforce_antirollback
       if (!write_version_to_atecc(manifest->version)) {
           // Failed to update version counter, this is a critical error.
           // The device might enter a locked state or require manual intervention.
