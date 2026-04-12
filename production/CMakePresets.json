@@ -25,8 +25,7 @@
       "binaryDir": "${sourceDir}/firmware/build-prod",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "FIRMWARE_PRODUCTION": "1",
-        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG"
+        "FIRMWARE_PRODUCTION": "1"
       }
     }
   ],

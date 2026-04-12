@@ -289,6 +289,8 @@ void settings_store_factory_reset(void) {
       .require_touch_for_fill = true,
       .hold_required_for_selection = true,
       .autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT,
+      .pin_attempt_limit = 5,
+      .wipe_on_lockout = false,
   };
   (void)settings_store_save(&defaults);
 }

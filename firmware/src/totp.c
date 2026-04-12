@@ -312,9 +312,8 @@ static bool totp_generate_code_internal(const uint8_t *secret, size_t secret_len
     snprintf(format_str, sizeof(format_str), "%%0%dd", digits);
     code_len = snprintf(out_code, out_len, format_str, binary_code % divisor);
 
-    // Securely zero out intermediate buffers
-    memset(counter_bytes, 0, sizeof(counter_bytes));
-    memset(hash, 0, sizeof(hash));
+    security_secure_zero(counter_bytes, sizeof(counter_bytes));
+    security_secure_zero(hash, sizeof(hash));
 
     return code_len > 0 && (size_t)code_len < out_len;
 }

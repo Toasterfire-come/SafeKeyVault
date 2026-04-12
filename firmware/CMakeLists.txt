@@ -48,6 +48,8 @@ set(FIRMWARE_SOURCES
     src/crypto_engine.c
     src/storage_backend.c
     src/usb_session.c
+    src/pcd_hal.c
+    src/usb_msc.c
     src/fido2_authenticator.c
     src/state_machine.c
     src/vault.c
@@ -60,6 +62,7 @@ set(FIRMWARE_SOURCES
     src/security_utils.c
     src/ui_feedback.c
     src/totp.c
+    src/main.c
     # Add STM32CubeU5 HAL driver sources here if not managed by a separate library
     # Example: Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.c
     # ... and so on for all necessary HAL drivers

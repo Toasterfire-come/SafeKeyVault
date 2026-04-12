@@ -403,15 +403,15 @@ bool crypto_engine_decrypt_password(const char *ciphertext,
                                  (uint8_t *)plaintext_out, plaintext_len, &plaintext_len);
 #else
   if (!g_crypto_state.secure_element_bound) {
-      // Fallback to stub for development builds if ATECC is not bound or fails
+      // Fallback to stub for development builds if ATECC is not bound or fails.
       success = crypto_stub_decrypt_password((const char*)ciphertext_bytes, plaintext_out, out_len);
       if (success) {
-          plaintext_len = strlen(plaintext_out); // Stub returns null-terminated string
+          plaintext_len = strlen(plaintext_out); // Stub returns null-terminated string.
       } else {
-           Error_Handler(); // Placeholder: In production, this should not occur if stub is not used.
+            security_secure_zero(plaintext_out, out_len); // Clear output on stub failure
       }
   } else {
-      // Use ATECC608A for AEAD decryption even in dev mode if bound
+      // Use ATECC608A for AEAD decryption even in dev mode if bound.
       success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY,
                                      ciphertext_bytes, ciphertext_len,
                                      nonce, sizeof(nonce),
@@ -421,20 +421,11 @@ bool crypto_engine_decrypt_password(const char *ciphertext,
 #endif
 
   if (!success) {
-    security_secure_zero(ciphertext_bytes, sizeof(ciphertext_bytes));
-    security_secure_zero(tag, sizeof(tag));
-    security_secure_zero(nonce, sizeof(nonce));
-    return false; // Decryption or tag verification failed
+    security_secure_zero(plaintext_out, out_len); // Zeroize plaintext buffer on failure
+    return false;
   }
-
-  // Ensure null termination if the plaintext_len is less than out_len
-  if (plaintext_len < out_len) {
-      plaintext_out[plaintext_len] = '\0';
-  } else {
-      // If decrypted plaintext is too long for buffer, treat as error and zeroize
-      security_secure_zero(plaintext_out, out_len);
-      return false;
-  }
+  return true;
+}
 
   security_secure_zero(ciphertext_bytes, sizeof(ciphertext_bytes));
   security_secure_zero(tag, sizeof(tag));
