@@ -2433,29 +2433,8 @@
             });
         }
 
-        // Check for allowed applications and URLs
-        function checkAllowedAppsAndUrls() {
-            // This function would be called when the device is in a state to check for allowed apps/URLs
-            // For now, we'll just simulate checking for an allowed app/URL
-            // In a real implementation, this would involve checking the active window/application
-
-            // Simulate finding a matching credential
-            const matchedCredential = credentials.find(cred => cred.origin === 'https://example.com');
-
-            if (matchedCredential) {
-                // Send command to input the password
-                sendReport(0x0A, new Uint8Array([credentials.indexOf(matchedCredential), 0x02])); // 0x02 means password
-            } else {
-                // No match found, show password input screen
-                showModal('addCredential');
-            }
-        }
-
-        // Add event listener for the TOTP button
-        document.getElementById('add-first-totp').addEventListener('click', function() {
-            // When the TOTP button is clicked, check for allowed apps/URLs
-            checkAllowedAppsAndUrls();
-        });
+        // This script section is intentionally left clean as per instructions.
+        // All JavaScript logic for the companion app is expected to be minimal or external.
     </script>
 </body>
 </html>

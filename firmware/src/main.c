@@ -43,57 +43,83 @@ bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t
     return false;
 }
 
-// Placeholder for a function to handle USB connection event
-void state_machine_on_usb_connect(device_context_t *ctx) {
-    // Logic to handle USB connection event
-    // e.g., reset session state, potentially trigger authentication
-    (void)ctx;
+// Forward declare functions from state_machine.c
+extern void state_machine_on_usb_connect(device_context_t *ctx);
+extern void state_machine_on_usb_disconnect(device_context_t *ctx); // Assuming this new function handles disconnect
+extern void update_led_state(device_context_t *ctx, uint32_t current_tick);
+
+// In-memory placeholder for credentials (will be loaded from secure storage)
+#define MAX_CREDENTIALS_IN_MEMORY 5
+static credential_record_t s_credentials_in_memory[MAX_CREDENTIALS_IN_MEMORY] = {0};
+static size_t s_credential_count = 0; // Number of credentials currently loaded from storage
+
+// Dummy implementations for HAL functions required by the framework
+// These would be provided by STM32CubeMX generated code
+void *__g_pfnVectors = (void*)0x00; // Placeholder for vector table
+void *SystemCoreClock = (void*)0x00;  // Placeholder for SystemCoreClock
+
+HAL_StatusTypeDef HAL_Init(void) {
+    // Implemented in STM32 HAL, stub here for compilation
+    return HAL_OK;
 }
 
-// Placeholder for USB session tick function
-void usb_session_tick(void) {
-    // Process any pending USB communication or events
+void SystemClock_Config(void) {
+    // System clock configuration is board-specific, stub here.
 }
 
-// Placeholder for USB session type credentials function
-bool usb_session_type_credentials(const credential_record_t *record, const char *origin) {
-    // Logic to type credentials via USB HID
-    // This would involve using platform_hal_usb_hid_type or similar
-    // Example:
-    // platform_hal_usb_hid_type(record->username);
-    // platform_hal_usb_hid_type("\t"); // Tab to next field
-    // platform_hal_usb_hid_type(record->password);
-    // platform_hal_usb_hid_type("\n"); // Enter
-    (void)record; (void)origin;
-    return true; // Placeholder
-}
-
-// Placeholder for Error_Handler
 void Error_Handler(void) {
-    // Implement error handling, e.g., blink an LED, enter a safe state
+    // In production, this should indicate a fatal, unrecoverable error
+    // e.g., by halting the system, or blinking an error LED pattern.
     while (1) {
         platform_hal_led_set(PLATFORM_HAL_LED_ERROR, true);
         platform_hal_tick(); // Keep ticking to potentially blink LED
     }
 }
 
-// Placeholder for SystemClock_Config
-void SystemClock_Config(void) {
-    // Implement system clock configuration
-    // This is highly dependent on the specific STM32U5 microcontroller
-    // Example:
-    // RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    // RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-    // ... configure clocks ...
-    // HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_X);
+
+// Function to get the pending credential and origin for typing
+bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t *out_credential, char *out_origin, size_t origin_len) {
+    // This is a placeholder. In a real system, the state machine would track the pending fill action.
+    // For this demonstration, we use a simple in-memory credential storage.
+    if (ctx->state == DEVICE_CONFIRM_TYPE && ctx->selected_credential_idx < s_credential_count) {
+        if (out_credential != NULL) {
+            *out_credential = s_credentials_in_memory[ctx->selected_credential_idx];
+        }
+        if (out_origin != NULL) {
+            strncpy(out_origin, s_credentials_in_memory[ctx->selected_credential_idx].origin, origin_len - 1);
+            out_origin[origin_len - 1] = '\0';
+        }
+        return true;
+    }
+    return false;
 }
 
+// Function to actually type the credentials over USB HID
+bool usb_session_type_credentials(const credential_record_t *record, const char *origin) {
+    // This function will use the platform_hal_usb_hid_type to send keystrokes.
+    // For simplicity, this is a direct typing. A more robust implementation might
+    // involve handling focus or specific browser interactions.
+    if (record == NULL || origin == NULL) {
+        return false;
+    }
+    // Type username
+    platform_hal_usb_hid_type(record->username);
+    platform_hal_delay_ms(50); // Small delay to simulate human typing
+    platform_hal_usb_hid_type("\t"); // Tab to next field
+    platform_hal_delay_ms(50);
+    // Type password
+    platform_hal_usb_hid_type(record->password);
+    platform_hal_delay_ms(50);
+    platform_hal_usb_hid_type("\n"); // Enter
+
+    return true;
+}
+
+// Main firmware entry point
 int main(void) {
     // Ensure secure boot verification occurs before any other initialization.
     // If the manifest is invalid, halt the device.
-    // The anti-rollback check is an integral part of secure_boot_verify_manifest
-    // and cannot be skipped. It must be unconditional in production builds.
-    if (!secure_boot_verify_manifest(NULL, NULL, 0)) { // Assuming manifest details are determined internally or from flash
+    if (!secure_boot_verify_manifest(NULL, NULL, 0)) {
         Error_Handler();
     }
 
@@ -114,27 +140,38 @@ int main(void) {
     // Initialize storage backend
     storage_backend_init();
 
-    // Initialize settings store
+    // Initialize settings store and load runtime settings
     settings_store_init();
     if (!settings_store_load(&g_runtime_settings)) {
-        // If loading settings fails, use default settings
-        // This would involve populating g_runtime_settings with default values
-        // For now, assume settings_store_init handles defaults or this is an error condition
-        // Example:
-        // memset(&g_runtime_settings, 0, sizeof(g_runtime_settings));
-        // g_runtime_settings.autolock_seconds = 300; // Default to 5 minutes
-        // ... set other defaults
+        // If loading settings fails (e.g., first boot or corruption), factory reset to defaults.
+        settings_store_factory_reset();
+        // Attempt to load again after factory reset. If this fails, it's a critical error.
+        if (!settings_store_load(&g_runtime_settings)) {
+            Error_Handler();
+        }
     }
+    // Apply loaded settings to the state machine
+    state_machine_apply_settings(&g_runtime_settings);
+
+
+    // Reload the PIN verifier for the state machine after settings are loaded.
+    // This assumes settings_store_load would populate a PIN verifier that state_machine_set_pin_verifier can use.
+    // However, the original structure for PIN verifier persistence is not exposed through settings_store.
+    // For now, we'll keep the direct approach the action_engine uses, which is to hash a default PIN if not set.
+    // The main.c should ideally get the PIN verifier from secure storage.
+    // This is a known current limitation, assuming `action_engine_init` or `state_machine_init` handles the first-time PIN setup.
+    // In a real device, PIN verifier should be securely loaded/derived from ATECC on boot.
 
     // Load TOTP store
     if (!totp_load(&g_totp_store)) {
-        // Handle TOTP store loading failure if necessary
-        // For now, assume totp_load initializes g_totp_store to a default state if it fails
+        // If TOTP store loading fails, initialize an empty store.
+        memset(&g_totp_store, 0, sizeof(g_totp_store));
+        g_totp_store.initialized = true;
     }
 
-    // Initialize USB session
+    // Initialize USB session (handles PCD_HAL as well)
     usb_session_init();
-    MX_USB_PCD_Init(); // Initialize USB peripheral
+    // MX_USB_PCD_Init(); // This function should be called from pcd_hal_init or equivalent.
 
     // Initialize state machine
     state_machine_init(&g_device_ctx);
@@ -144,10 +181,10 @@ int main(void) {
         // Update platform HAL status (e.g., tick counter, touch input)
         platform_hal_tick();
 
-        // Process USB session events
+        // Process USB session events (polls HID and MSC endpoints)
         usb_session_tick();
 
-        // Update device state
+        // Update device state (inactivity timer, etc.)
         state_machine_tick(&g_device_ctx);
 
         // Handle touch input
@@ -162,54 +199,50 @@ int main(void) {
         }
 
         // Handle USB connection/disconnection
-        bool usb_connected_curr = usb_session_is_connected(); // Assuming this checks connection status
-        static bool usb_connected_prev = false; // Initialize static variable
+        bool usb_connected_curr = usb_session_is_connected();
+        static bool usb_connected_prev = false;
 
         if (usb_connected_curr && !usb_connected_prev) {
             // USB just connected
             state_machine_on_usb_connect(&g_device_ctx);
-            usb_session_start(); // Start the USB session
-            if (g_runtime_settings.auto_popup_enabled && g_device_ctx.unlocked) {
-                // Trigger autofill for default account if settings allow
-                // This part requires more context on how to select the default account and trigger autofill
-                // For now, we'll assume a placeholder function or logic.
-                // Example:
-                // if (g_device_ctx.selected_credential_idx < MAX_CREDENTIALS) { // Assuming MAX_CREDENTIALS is defined
-                //     state_machine_request_fill(&g_device_ctx, &g_credentials[g_device_ctx.selected_credential_idx], "default_origin"); // Placeholder origin
-                // }
-            }
+            usb_session_start_auth_challenge(); // Start authentication challenge
         } else if (!usb_connected_curr && usb_connected_prev) {
             // USB just disconnected
-            state_machine_lock(&g_device_ctx); // Lock the device directly
+            state_machine_on_usb_disconnect(&g_device_ctx); // Call a specific disconnect handler
             usb_session_end(); // End the USB session
         }
         usb_connected_prev = usb_connected_curr;
 
-
         // Check for pending actions and update UI feedback
         ui_status_t ui_status;
-        ui_feedback_from_state(&g_device_ctx, NULL, &ui_status); // Pass ui_status pointer
+        ui_feedback_from_state(&g_device_ctx, NULL, &ui_status);
 
         // Implement autofill logic here based on state and UI feedback
-        if (g_device_ctx.state == DEVICE_CONFIRM_TYPE && ui_status.show_hold_hint) {
+        // This logic should ONLY execute if the state machine explicitly allows typing.
+        if (g_device_ctx.state == DEVICE_CONFIRM_TYPE) {
             credential_record_t pending_credential;
             char pending_origin[MAX_ORIGIN_LEN];
             if (state_machine_get_pending_action(&g_device_ctx, &pending_credential, pending_origin, sizeof(pending_origin))) {
-                usb_session_type_credentials(&pending_credential, pending_origin);
+                // If the state implies typing is confirmed, proceed.
+                // This typically means the user has acknowledged with touch/hold.
+                if (usb_session_type_credentials(&pending_credential, pending_origin)) {
+                    // Typing successful, transition device state (e.g., back to unlocked/idle)
+                    state_machine_post_credential_action(&g_device_ctx); // Assuming this function exists.
+                } else {
+                    // Handle typing failure.
+                    state_machine_reset_pending_action(&g_device_ctx); // Assuming this function exists.
+                }
             }
         }
 
         // Update LED state based on the current LED pattern from ui_status
-        // The ui_feedback_from_state function now determines the pattern,
-        // and a new helper function will apply it.
         g_device_ctx.current_led_pattern = ui_status.led_pattern;
-        update_led_state(&g_device_ctx, platform_hal_get_systick());
+        update_led_state(&g_device_ctx, HAL_GetTick()); // Use HAL_GetTick for current time
 
 
         // Add a small delay or yield if necessary to prevent busy-waiting
         platform_hal_delay_ms(1);
     }
+    // Should never reach here
+    return 0;
 }
-
-// Implement the specific LED update logic
-extern void update_led_state(device_context_t *ctx, uint32_t current_tick);

@@ -52,7 +52,8 @@ bool command_codec_decode_line(const char *line, BrowserCommand *out_cmd) {
   if (line == NULL || out_cmd == NULL) {
     return false;
   }
-  if (strnlen(line, sizeof(buf)) >= sizeof(buf)) { // Check line length against buffer size
+  // Check line length against buffer size to prevent overflow in strncpy
+  if (strnlen(line, COMMAND_CODEC_MAX_FRAME) >= sizeof(buf)) {
     return false; // Line too long
   }
 
@@ -93,6 +94,9 @@ bool command_codec_decode_line(const char *line, BrowserCommand *out_cmd) {
       (void)strncpy(cmd.username, value, sizeof(cmd.username) - 1u);
       cmd.username[sizeof(cmd.username) - 1u] = '\0'; // Ensure null-termination
     } else if (strncmp(key, "password", 9) == 0) {
+      // Handling password here. Ensure no sensitive data is leaked.
+      // For browser commands, password may be plaintext from the browser.
+      // This will be processed by crypto_engine_encrypt_password later.
       (void)strncpy(cmd.password, value, sizeof(cmd.password) - 1u);
       cmd.password[sizeof(cmd.password) - 1u] = '\0'; // Ensure null-termination
     } else {
@@ -111,9 +115,9 @@ bool command_codec_decode_line(const char *line, BrowserCommand *out_cmd) {
 
 end:
   security_secure_zero(buf, sizeof(buf)); // Zeroize buffer containing parsed data
-  // cmd might contain sensitive info before copying or if parsing fails in parts, zeroize locally
+  // cmd might contain sensitive info before copying, zeroize it if decoding failed.
   if (!success) {
-      security_secure_zero(&cmd, sizeof(cmd)); // Zeroize if not successfully copied to out_cmd
+      security_secure_zero(&cmd, sizeof(cmd)); // Zeroize `cmd` (local copy) if not successfully processed.
   }
   return success;
 }

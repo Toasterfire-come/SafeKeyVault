@@ -66,11 +66,7 @@ static void settings_store_nonce(uint8_t out_nonce[12]) {
   // (like a monotonic counter and securely stored device secret).
   // ATECC typically provides a hardware random number generator, but dedicated nonce generation
   // often uses derived keys and counters for AES-GCM.
-
-  // We will pass the current counter as AAD to the crypto_engine_encrypt_aead function.
-  // The ATECC-based crypto_engine_encrypt_aead should internally manage a unique nonce.
-  // For settings_store specifically, we'll use a derived nonce that incorporates the counter and the device secret
-  // or transaction ID.
+  // Nonce generation should leverage the ATECC's TRNG and internal counters, mixed with AAD specific info if needed.
 
   // For now, let's generate a simple seed for the nonce from a counter and hash it.
   // This is a minimal step towards uniqueness, but the ATECC should ideally provide a better mechanism.
@@ -82,10 +78,15 @@ static void settings_store_nonce(uint8_t out_nonce[12]) {
       crypto_engine_hash16(nonce_seed, sizeof(nonce_seed), hashed_nonce_seed);
       memcpy(out_nonce, hashed_nonce_seed, 12);
   } else {
-      // Fallback or error handling if device secret cannot be read (should not happen in production)
-      // For now, a simple hash of the counter as a fallback. Not ideal.
+      // If device secret cannot be read, especially in production, this is a critical error.
+      // In production, this path implies a severe provisioning or hardware issue.
+#if FIRMWARE_PRODUCTION
+      Error_Handler(); // Halt the device if device secret cannot be read.
+#else
+      // In development, fallback to a simple hash of the counter as a placeholder.
       crypto_engine_hash16((const uint8_t*)&mixed_counter, sizeof(mixed_counter), hashed_nonce_seed);
       memcpy(out_nonce, hashed_nonce_seed, 12);
+#endif
   }
 
   security_secure_zero(nonce_seed, sizeof(nonce_seed));
@@ -207,39 +208,19 @@ bool settings_store_load(runtime_settings_t *settings) {
   if (g_settings_store.encrypted_payload_len == 0u) {
     memset(record, 0, sizeof(record));
     if (!storage_backend_read_latest(record, sizeof(record), &record_len, &schema_version)) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Settings Store: Failed to read from storage backend.\n");
-#endif
       return false;
     }
     if (schema_version != SETTINGS_VERSION) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Settings Store: Schema version mismatch (Storage: %u, Expected: %u).\n", schema_version, SETTINGS_VERSION);
-#endif
       return false; // Schema mismatch
     }
     if (record_len < (4u + sizeof(settings_blob_t))) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Settings Store: Read record too short (%zu bytes).\n", record_len);
-#endif
       return false; // Record too short
     }
     memcpy(&stored_payload_len, record, sizeof(stored_payload_len));
     if (stored_payload_len == 0u || stored_payload_len > sizeof(g_settings_store.encrypted_payload)) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Settings Store: Invalid stored payload length (%u).\n", stored_payload_len);
-#endif
       return false; // Invalid payload length
     }
     if (record_len != (4u + sizeof(settings_blob_t) + stored_payload_len)) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Settings Store: Record length mismatch (Expected: %zu, Actual: %zu).\n", (4u + sizeof(settings_blob_t) + stored_payload_len), record_len);
-#endif
       return false; // Record length mismatch
     }
     memcpy(&g_settings_store.blob, record + 4u, sizeof(settings_blob_t));
@@ -264,19 +245,11 @@ bool settings_store_load(runtime_settings_t *settings) {
                                   &plaintext_len)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
-#if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Settings Store: Decryption or tag verification failed.\n");
-#endif
     return false; // Decryption/authentication failed
   }
   if (plaintext_len != sizeof(settings_blob_t)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
-#if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Settings Store: Decrypted data size mismatch (Expected: %zu, Actual: %zu).\n", sizeof(settings_blob_t), plaintext_len);
-#endif
     return false; // Decrypted data size mismatch
   }
   memcpy(&blob, plaintext, sizeof(blob));
@@ -285,10 +258,6 @@ bool settings_store_load(runtime_settings_t *settings) {
 
   expected_crc = settings_crc(&blob.settings);
   if (expected_crc != blob.crc32) {
-#if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Settings Store: CRC mismatch (Expected: 0x%08X, Actual: 0x%08X).\n", expected_crc, blob.crc32);
-#endif
     return false; // CRC mismatch indicates data corruption
   }
 
@@ -329,11 +298,12 @@ bool settings_store_debug_snapshot(settings_blob_t *out_blob,
                                    size_t out_payload_capacity,
                                    size_t *out_payload_len) {
 #if FIRMWARE_PRODUCTION
+  // Debug interfaces disabled in production
   (void)out_blob;
   (void)out_payload;
   (void)out_payload_capacity;
   (void)out_payload_len;
-  return false; // Debug interfaces disabled in production
+  return false;
 #else
   if (!g_settings_store.initialized || out_blob == NULL ||
       out_payload == NULL || out_payload_len == NULL) {
@@ -354,10 +324,11 @@ bool settings_store_debug_restore(const settings_blob_t *blob,
                                   const uint8_t *payload,
                                   size_t payload_len) {
 #if FIRMWARE_PRODUCTION
+  // Debug interfaces disabled in production
   (void)blob;
   (void)payload;
   (void)payload_len;
-  return false; // Debug interfaces disabled in production
+  return false;
 #else
   if (!g_settings_store.initialized || blob == NULL || payload == NULL) {
     return false;

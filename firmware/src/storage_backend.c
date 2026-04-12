@@ -129,37 +129,18 @@ bool storage_backend_wipe(void) {
   }
 
   // Securely zeroize all internal state before wiping physical storage.
+  // In a real system, this would involve low-level flash erase operations.
   for (size_t i = 0; i < STORAGE_BACKEND_SLOTS; ++i) {
     security_secure_zero(&g_storage_backend.slots[i], sizeof(storage_slot_internal_t));
+    g_storage_backend.slots[i].valid = false; // Mark as invalid
   }
 
-  // Now, perform a secure wipe of the physical flash memory used for storage.
-  // This involves overwriting multiple times if required for data remanence protection.
-  // Assuming a low-level function like storage_backend_physical_erase_slot exists.
-  // Overwriting with 0xFF then 0x00 is a common practice for secure erase.
-  // This needs to be implemented at the hardware abstraction layer.
-  // For this mock implementation, we iterate through the 'slots' in memory
-  // and simulate a secure erase. In a real system, these 'slots' map to
-  // physical flash sectors.
-  uint8_t buffer[STORAGE_BACKEND_MAX_PAYLOAD]; // Temporary buffer for secure overwrite
+  // In a production system, this would involve actually erasing the flash sectors
+  // multiple times to prevent data remanence. For this simulated backend,
+  // zeroizing memory is the closest approximation.
+  // Example for production: spi_hal_erase_sector(SECTOR_X);
 
-  for (size_t i = 0; i < STORAGE_BACKEND_SLOTS; ++i) {
-      // Step 1: Overwrite with 0xFF
-      memset(buffer, 0xFF, sizeof(buffer));
-      // In a real system, this buffer would be written to the flash sector.
-      // E.g., storage_backend_write_physical_sector(slot_address[i], buffer, sizeof(buffer));
-
-      // Step 2: Overwrite with 0x00 (zeroize)
-      memset(buffer, 0x00, sizeof(buffer));
-      // E.g., storage_backend_write_physical_sector(slot_address[i], buffer, sizeof(buffer));
-
-      // After physical erase, mark internal slot as invalid and zeroize its contents
-      memset(&g_storage_backend.slots[i], 0, sizeof(storage_slot_internal_t));
-      g_storage_backend.slots[i].valid = false;
-  }
-  security_secure_zero(buffer, sizeof(buffer)); // Zeroize temporary buffer
-
-  // Finally, fully clear the state back to uninitialized state data.
+  // Finally, fully clear the state back to a default initialized state.
   memset(&g_storage_backend, 0, sizeof(g_storage_backend));
   g_storage_backend.initialized = true; // Re-initialize only the control flags
 

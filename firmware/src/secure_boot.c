@@ -46,20 +46,13 @@ static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN])
 
     // Read the last flash sector
     if (spi_hal_read_sector(FLASH_LAST_SECTOR_ADDRESS, flash_sector_buffer, sizeof(flash_sector_buffer), &bytes_read) != SPI_HAL_SUCCESS) {
-#if !FIRMWARE_PRODUCTION
-        // Example debug logging:
-        // printf("Secure Boot: Failed to read firmware signature from flash.\n");
-#endif
-        goto end; // Failed to read flash sector
+        return false; // Failed to read flash sector
     }
 
     // Extract the signature from the buffer
+    // Check if the read data size is sufficient before copying
     if (bytes_read < (FIRMWARE_SIGNATURE_OFFSET + ECDSA_P256_SIGNATURE_LEN)) {
-#if !FIRMWARE_PRODUCTION
-        // Example debug logging:
-        // printf("Secure Boot: Not enough data in flash sector for signature.\n");
-#endif
-        goto end; // Not enough data in the sector for the signature
+        return false; // Not enough data in the sector for the signature
     }
     memcpy(signature, flash_sector_buffer + FIRMWARE_SIGNATURE_OFFSET, ECDSA_P256_SIGNATURE_LEN);
     success = true;
@@ -83,12 +76,6 @@ static bool read_version_from_atecc(uint32_t *version) {
         memcpy(version, version_data, VERSION_COUNTER_LEN);
         success = true;
     }
-#if !FIRMWARE_PRODUCTION
-    else {
-        // Example debug logging:
-        // printf("Secure Boot: Failed to read version counter from ATECC.\n");
-    }
-#endif
 
 end:
     security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
@@ -108,12 +95,6 @@ static bool write_version_to_atecc(uint32_t version) {
     if (atecc608a_write_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
         success = true;
     }
-#if !FIRMWARE_PRODUCTION
-    else {
-        // Example debug logging:
-        // printf("Secure Boot: Failed to write version counter to ATECC.\n");
-    }
-#endif
 
 end:
     security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
@@ -137,11 +118,14 @@ void secure_boot_init(void) {
   // This value determines the minimum allowed version for any new firmware.
   uint32_t stored_version_on_init = 0;
   if (!read_version_from_atecc(&stored_version_on_init)) {
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Secure Boot: Failed to read initial version counter from ATECC. Assuming 0.\n");
+#if FIRMWARE_PRODUCTION
+      // In production, failure to read the version counter is a critical error.
+      // Halt the device.
+      Error_Handler();
+#else
+      // In development, assume 0 as an initial version if read fails.
+      stored_version_on_init = 0;
 #endif
-      stored_version_on_init = 0; // If read fails, assume 0 for safety but this indicates a problem
   }
   g_secure_boot.current_version = stored_version_on_init;
 }
@@ -208,10 +192,6 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
     if (!g_secure_boot.signing_key_set) {
       // Signing public key not set, cannot verify signature. This is a critical failure.
       out_result->signature_valid = false;
-#if !FIRMWARE_PRODUCTION
-      // Example debug logging:
-      // printf("Secure Boot: Signature verification failed - signing key not set. Rejecting.\n");
-#endif
       overall_success = false; // Set overall failure
       goto end; // Immediately exit as signing key is crucial
     }
@@ -225,15 +205,15 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
                                      firmware_signature,
                                      ECDSA_P256_SIGNATURE_LEN)) {
         signature_ok = true;
+      } else {
+          // Signature verification failed.
+          signature_ok = false;
       }
+    } else {
+        // Failed to read signature from flash.
+        signature_ok = false;
     }
     out_result->signature_valid = signature_ok;
-#if !FIRMWARE_PRODUCTION
-    if (!signature_ok) {
-        // Example debug logging:
-        // printf("Secure Boot: Signature verification failed.\n");
-    }
-#endif
   } else {
     out_result->signature_valid = true; // Signature enforcement is disabled
   }
@@ -269,18 +249,8 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
         // If ATECC is enforcing anti-rollback, it means it *should* have a version.
         // If it cannot be read, it's a security-critical failure.
         rollback_ok = false;
-#if !FIRMWARE_PRODUCTION
-        // Example debug logging:
-        // printf("Secure Boot: CRITICAL - Failed to read version from ATECC for anti-rollback. Rejecting.\n");
-#endif
     }
     out_result->antirollback_ok = rollback_ok;
-#if !FIRMWARE_PRODUCTION
-    if (!rollback_ok) {
-        // Example debug logging:
-        // printf("Secure Boot: Anti-rollback check failed (Manifest version: %u, Stored version: %u (from ATECC)).\n", manifest->version, stored_version);
-    }
-#endif
   } else {
     out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled, so a "rollback" is allowed
   }
@@ -296,10 +266,7 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
           // If we can't update ATECC, the integrity of future updates is compromised.
           // The device might enter a locked state or require manual intervention to recover.
           out_result->accepted = false; // Reject if version update fails
-#if !FIRMWARE_PRODUCTION
-          // Example debug logging:
-          // printf("Secure Boot: CRITICAL - Failed to update version counter in ATECC after acceptance. Rejecting.\n");
-#endif
+          Error_Handler(); // Critical error in production: cannot update anti-rollback counter.
       }
   }
   overall_success = true;

@@ -59,10 +59,8 @@ bool fido2_create_credential(const char *rp_id,
                                          credential_private_key, sizeof(credential_private_key))) {
     goto end;
   }
-  // (Optional: store `credential_private_key` securely in ATECC if not generated directly there,
-  // or store a reference/handle to it)
-  // For this example, we assume `crypto_engine_generate_ec_keypair` handles secure storage
-  // or that the private key is ephemeral/handled by the ATECC internally.
+  // The private key should be generated and kept within the ATECC secure element.
+  // The `crypto_engine_generate_ec_keypair` function (ATECC mode) should handle this.
 
   // Use the public key or a hash of it as the credential ID
   crypto_engine_hash256(credential_public_key, sizeof(credential_public_key), out_cred->id);
@@ -137,14 +135,11 @@ bool fido2_get_assertion(const char *rp_id,
   signature_input_len += 32;
 
   // 4. Sign the data using the credential's private key
-  // For production, this involves using the secure element to sign using the stored private key
-  // For this stub, we'll simulate private key loading from a handle
-  // (In real ATECC, you'd use a command to sign directly from slot)
-  if (!crypto_engine_read_atecc_slot(ATECC608A_SLOT_CRED_PRIVKEY, credential_private_key_handle, sizeof(credential_private_key_handle))) {
-      goto end; // Failed to get private key handle
-  }
+  // For production, this involves using the secure element to sign using the stored private key.
+  // The `credential_private_key_handle` is not actually a key, but a slot ID for the ATECC.
+  const uint8_t credential_slot_id = ATECC608A_SLOT_FIDO_PRIVKEY; // Assuming FIDO private key is stored here
 
-  if (!crypto_engine_ecdsa_sign(credential_private_key_handle, sizeof(credential_private_key_handle),
+  if (!crypto_engine_ecdsa_sign(&credential_slot_id, sizeof(credential_slot_id),
                                 signature_input_buffer, signature_input_len,
                                 signature, sizeof(signature))) {
     goto end;

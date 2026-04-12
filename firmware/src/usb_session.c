@@ -198,85 +198,9 @@ static const uint8_t usb_string_descriptor_serial[] = {
     '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '0', 0x00, '1', 0x00
 };
 
-static const uint8_t usb_hid_report_descriptor_keyboard[] = {
-    0x05, 0x01,                 // USAGE_PAGE (Generic Desktop)
-    0x09, 0x06,                 // USAGE (Keyboard)
-    0xA1, 0x01,                 // COLLECTION (Application)
-    0x05, 0x07,                 // USAGE_PAGE (Keyboard)
-    0x19, 0xE0,                 // USAGE_MINIMUM (Keyboard LeftControl)
-    0x29, 0xE7,                 // USAGE_MAXIMUM (Keyboard Right GUI)
-    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
-    0x25, 0x01,                 // LOGICAL_MAXIMUM (1)
-    0x75, 0x01,                 // REPORT_SIZE (1)
-    0x95, 0x08,                 // REPORT_COUNT (8)
-    0x81, 0x02,                 // INPUT (Data,Var,Abs)
-    0x95, 0x01,                 // REPORT_COUNT (1)
-    0x75, 0x08,                 // REPORT_SIZE (8)
-    0x81, 0x01,                 // INPUT (Cnst,Ary,Abs)
-    0x95, 0x05,                 // REPORT_COUNT (5)
-    0x75, 0x08,                 // REPORT_SIZE (8)
-    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
-    0x25, 0x65,                 // LOGICAL_MAXIMUM (101)
-    0x05, 0x07,                 // USAGE_PAGE (Keyboard)
-    0x19, 0x00,                 // USAGE_MINIMUM (Reserved (no event indicated))
-    0x29, 0x65,                 // USAGE_MAXIMUM (Keyboard Application)
-    0x81, 0x00,                 // INPUT (Data,Ary,Abs)
-    0xC0                        // END_COLLECTION
-};
-
-static const uint8_t usb_hid_report_descriptor_custom[] = {
-    0x06, 0x00, 0xFF,           // USAGE_PAGE (Vendor Defined Page 1)
-    0x09, 0x01,                 // USAGE (Vendor Usage 1)
-    0xA1, 0x01,                 // COLLECTION (Application)
-    0x85, USB_HID_REPORT_ID_PIN_PROMPT, // REPORT_ID (PIN_PROMPT)
-    0x15, 0x00,                 // LOGICAL_MINIMUM (0)
-    0x26, 0xFF, 0x00,           // LOGICAL_MAXIMUM (255)
-    0x75, 0x08,                 // REPORT_SIZE (8)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x01,                 // USAGE (Vendor Usage 1)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_POPUP_TRIGGER, // REPORT_ID (POPUP_TRIGGER)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x02,                 // USAGE (Vendor Usage 2)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_PIN_RESPONSE, // REPORT_ID (PIN_RESPONSE)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x03,                 // USAGE (Vendor Usage 3)
-    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
-    0x85, USB_HID_REPORT_ID_CREDENTIAL_LIST_REQUEST, // REPORT_ID (CREDENTIAL_LIST_REQUEST)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x04,                 // USAGE (Vendor Usage 4)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_CREDENTIAL_LIST_RESPONSE, // REPORT_ID (CREDENTIAL_LIST_RESPONSE)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x05,                 // USAGE (Vendor Usage 5)
-    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
-    0x85, USB_HID_REPORT_ID_SETTINGS_READ, // REPORT_ID (SETTINGS_READ)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x06,                 // USAGE (Vendor Usage 6)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_SETTINGS_WRITE, // REPORT_ID (SETTINGS_WRITE)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x07,                 // USAGE (Vendor Usage 7)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_TOTP_REQUEST, // REPORT_ID (TOTP_REQUEST)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x08,                 // USAGE (Vendor Usage 8)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_TOTP_RESPONSE, // REPORT_ID (TOTP_RESPONSE)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x09,                 // USAGE (Vendor Usage 9)
-    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
-    0x85, USB_HID_REPORT_ID_AUTOFILL_REQUEST, // REPORT_ID (AUTOFILL_REQUEST)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x0A,                 // USAGE (Vendor Usage 10)
-    0x91, 0x82,                 // OUTPUT (Data,Var,Abs,NPrf)
-    0x85, USB_HID_REPORT_ID_STATUS, // REPORT_ID (STATUS)
-    0x95, 0x3F,                 // REPORT_COUNT (63)
-    0x09, 0x0B,                 // USAGE (Vendor Usage 11)
-    0x81, 0x82,                 // INPUT (Data,Var,Abs,NWrp,Lin,Pref)
-    0xC0                        // END_COLLECTION
-};
+// Removed usb_hid_report_descriptor_keyboard and usb_hid_report_descriptor_custom
+// These descriptors are now managed by pcd_hal.c for HID keyboard functionality.
+// The USB composite device configuration moved to pcd_hal.c to centralize USB descriptor management.
 
 void usb_session_init(void) {
   // Use secure_zero to ensure sensitive data is not left in memory
@@ -320,29 +244,6 @@ bool usb_session_start(usb_session_challenge_t *out_challenge) {
   return success;
 }
 
-bool usb_session_debug_compute_expected_response(const usb_session_challenge_t *challenge,
-                                                 uint8_t *out_response,
-                                                 size_t out_len) {
-  uint8_t digest[16] = {0}; // Initialize for security
-  bool success = false;
-
-  if (challenge == NULL || out_response == NULL || out_len < 16u) {
-    goto end;
-  }
-  // Validate challenge_len
-  if (challenge->challenge_len > sizeof(challenge->challenge)) {
-    goto end;
-  }
-
-  crypto_engine_hash16(challenge->challenge, challenge->challenge_len, digest);
-  memcpy(out_response, digest, 16u); // Ensure to copy exactly 16 bytes for a full hash
-  success = true;
-
-end:
-  security_secure_zero(digest, sizeof(digest)); // Zeroize sensitive digest
-  return success;
-}
-
 bool usb_session_authenticate(const uint8_t *host_response, size_t response_len) {
   usb_session_challenge_t current = {0}; // Initialize for security
   uint8_t expected[16] = {0}; // Initialize for security
@@ -355,10 +256,8 @@ bool usb_session_authenticate(const uint8_t *host_response, size_t response_len)
   current.challenge_len = g_challenge_len;
   memcpy(current.challenge, g_challenge, current.challenge_len); // Copy challenge
 
-  // Compute expected response using the helper function
-  if (!usb_session_debug_compute_expected_response(&current, expected, sizeof(expected))) {
-    goto end; // Error in computing expected response
-  }
+  // Compute expected response
+  crypto_engine_hash16(current.challenge, current.challenge_len, expected);
 
   // Perform constant-time comparison of the host response with the expected response
   if (!sec_consttime_memeq(expected, host_response, 16u)) {

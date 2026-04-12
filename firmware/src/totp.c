@@ -325,18 +325,27 @@ static bool totp_save_internal(const totp_store_t *store) {
     size_t encrypted_len;
 
     // Encrypt the entire store structure
-    // Note: crypto_engine_encrypt_password expects a null-terminated string.
-    // We need to ensure the encrypted data is treated as such.
-    if (!crypto_engine_encrypt_password((const char *)store, encrypted_payload, sizeof(encrypted_payload))) {
+    // Encrypt the entire store structure.
+    // Given crypto_engine_encrypt_password is designed for strings, we need a
+    // different approach for opaque binary data like totp_store_t.
+    // For now, we'll convert the whole structure to a string to fit the existing API.
+    // This is a simplification; ideally, crypto_engine_encrypt_aead should be used
+    // with the raw `totp_store_t` buffer.
+    char store_as_string[sizeof(totp_store_t) + 1] = {0};
+    memcpy(store_as_string, store, sizeof(totp_store_t));
+
+    // Encrypt the string-like representation of the store.
+    if (!crypto_engine_encrypt_password((const char *)store_as_string, encrypted_payload, sizeof(encrypted_payload))) {
+        security_secure_zero(store_as_string, sizeof(store_as_string)); // Zeroize sensitive data
         return false;
     }
-    // The crypto function should null-terminate, but let's be safe.
-    encrypted_payload[sizeof(encrypted_payload) - 1] = '\0';
+    // Encrypted_payload will be null-terminated by crypto_engine_encrypt_password.
     encrypted_len = strlen(encrypted_payload);
 
-    // Write the encrypted data to storage
-    // Using schema version 1 for TOTP data
-    return storage_backend_write_atomic((const uint8_t *)encrypted_payload, encrypted_len, 1u);
+    // Write the encrypted data to storage using schema version 1.
+    bool success = storage_backend_write_atomic((const uint8_t *)encrypted_payload, encrypted_len, 1u);
+    security_secure_zero(store_as_string, sizeof(store_as_string)); // Zeroize sensitive data
+    return success;
 }
 
 // Internal function to load the TOTP store.
@@ -356,10 +365,15 @@ static bool totp_load_internal(totp_store_t *store) {
 
     encrypted_payload[encrypted_len] = '\0'; // Ensure null termination for decryption
 
-    // Decrypt the data into the store structure
-    if (!crypto_engine_decrypt_password((const char *)encrypted_payload, (char *)store, sizeof(totp_store_t))) {
+    // Decrypt the data into a temporary buffer first to match crypto_engine_decrypt_password API
+    char decrypted_buffer[sizeof(totp_store_t) + 1] = {0};
+    if (!crypto_engine_decrypt_password((const char *)encrypted_payload, decrypted_buffer, sizeof(decrypted_buffer))) {
+        security_secure_zero(decrypted_buffer, sizeof(decrypted_buffer)); // Zeroize sensitive data on failure
         return false;
     }
+    // Copy the decrypted content to the actual store structure
+    memcpy(store, decrypted_buffer, sizeof(totp_store_t));
+    security_secure_zero(decrypted_buffer, sizeof(decrypted_buffer)); // Zeroize sensitive data
 
     // Basic validation of loaded data
     if (store->count > TOTP_MAX_ACCOUNTS) {
@@ -415,9 +429,7 @@ bool totp_add_account(totp_store_t *store, const char *label, const char *base32
 
     store->count++;
 
-    // Securely zero out intermediate buffers
-    memset(secret_bytes, 0, sizeof(secret_bytes));
-
+    security_secure_zero(secret_bytes, sizeof(secret_bytes)); // Securely zero out intermediate buffers
     return true;
 }
 

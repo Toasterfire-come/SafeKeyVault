@@ -21,7 +21,7 @@ static uint8_t g_pin_verifier[16];
 static bool g_pin_verifier_set = false;
 static uint32_t g_last_nonce = 0u;
 
-static void clear_pending(pending_request_t *pending) {
+void action_engine_clear_pending(pending_request_t *pending) {
   if (pending == NULL) {
     return;
   }
@@ -76,8 +76,14 @@ void action_engine_init(action_engine_t *engine, vault_t *vault, device_context_
   clear_pending(&engine->pending);
   rate_limiter_init(&g_command_limiter);
   if (!g_pin_verifier_set) {
+    // In production, the PIN verifier MUST be provisioned securely, not derived from a default.
+    // For development, we use a default simple hash.
+#if FIRMWARE_PRODUCTION
+    Error_Handler(); // Critical error: PIN verifier not set in production.
+#else
     crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
     g_pin_verifier_set = true;
+#endif
   }
   state_machine_set_pin_verifier(g_pin_verifier);
   g_last_nonce = 0u;
@@ -156,7 +162,7 @@ bool action_engine_handle_command(action_engine_t *engine,
         return true;
       }
 
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       engine->pending.kind = ACTION_PENDING_FILL;
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
@@ -178,7 +184,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       (void)strncpy(rec.username, cmd->username, sizeof(rec.username) - 1u);
       (void)strncpy(rec.password, cmd->password, sizeof(rec.password) - 1u);
       rec.updated_at_epoch = g_action_clock++;
-      rec.requires_touch = true;
+      rec.requires_touch = true; // All saves require touch approval.
 
       policy = security_evaluate_password(rec.password);
       out->weak_password_warning = (policy.strength == PASSWORD_STRENGTH_WEAK);
@@ -195,7 +201,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       }
       entry.id = password_store_next_id(engine->vault);
 
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       engine->pending.kind = ACTION_PENDING_SAVE;
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
@@ -227,7 +233,7 @@ bool action_engine_handle_command(action_engine_t *engine,
         return true;
       }
       rec.updated_at_epoch = g_action_clock++;
-      rec.requires_touch = true;
+      rec.requires_touch = true; // Generated password saves also require touch.
 
       if (!stash_record(&rec, &entry)) {
         (void)snprintf(out->message, sizeof(out->message), "prepare generated save failed");
@@ -235,7 +241,7 @@ bool action_engine_handle_command(action_engine_t *engine,
       }
       entry.id = password_store_next_id(engine->vault);
 
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       engine->pending.kind = ACTION_PENDING_GENERATE;
       engine->pending.command = *cmd;
       engine->pending.credential = entry;
@@ -348,7 +354,7 @@ bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out) {
     if (engine->ctx->state == DEVICE_UNLOCKED) {
       if (!load_record_plaintext(&engine->pending.credential, &rec)) {
         (void)snprintf(out->message, sizeof(out->message), "decrypt failed");
-        clear_pending(&engine->pending);
+        action_engine_clear_pending(&engine->pending);
         return true;
       }
       out->allowed = true;
@@ -356,7 +362,7 @@ bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out) {
       (void)strncpy(out->typed_username, rec.username, sizeof(out->typed_username) - 1u);
       (void)strncpy(out->typed_password, rec.password, sizeof(out->typed_password) - 1u);
       (void)snprintf(out->message, sizeof(out->message), "typed credential");
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       return true;
     }
   } else if (engine->pending.kind == ACTION_PENDING_SAVE ||
@@ -374,7 +380,7 @@ bool action_engine_confirm_tap(action_engine_t *engine, ActionResult *out) {
   }
 
   (void)snprintf(out->message, sizeof(out->message), "invalid transition");
-  clear_pending(&engine->pending);
+  action_engine_clear_pending(&engine->pending);
   return true;
 }
 
@@ -406,7 +412,7 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
     credential_record_t rec;
     if (!load_record_plaintext(&engine->pending.credential, &rec)) {
       (void)snprintf(out->message, sizeof(out->message), "decrypt failed");
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       return true;
     }
     out->allowed = true;
@@ -415,7 +421,7 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
     (void)strncpy(out->typed_password, rec.password, sizeof(out->typed_password) - 1u);
     (void)snprintf(out->message, sizeof(out->message), "typed credential");
     engine->ctx->state = DEVICE_UNLOCKED;
-    clear_pending(&engine->pending);
+    action_engine_clear_pending(&engine->pending);
     return true;
   }
 
@@ -428,7 +434,7 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
     if (!password_store_get_by_index(engine->vault, engine->pending.pending_index,
                                      &engine->last_selected)) {
       (void)snprintf(out->message, sizeof(out->message), "selection failed");
-      clear_pending(&engine->pending);
+      action_engine_clear_pending(&engine->pending);
       return true;
     }
     engine->has_last_selected = true;
@@ -438,12 +444,12 @@ bool action_engine_confirm_hold(action_engine_t *engine, ActionResult *out) {
     out->performed = true;
     out->selected_next = true;
     (void)snprintf(out->message, sizeof(out->message), "credential selected");
-    clear_pending(&engine->pending);
+    action_engine_clear_pending(&engine->pending);
     return true;
   }
 
   (void)snprintf(out->message, sizeof(out->message), "invalid transition");
-  clear_pending(&engine->pending);
+  action_engine_clear_pending(&engine->pending);
   return true;
 }
 

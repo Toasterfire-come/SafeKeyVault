@@ -254,8 +254,12 @@ static PCD_HandleTypeDef* get_pcd_handle(void) {
 }
 
 // USB interrupt handler (needs to be called from the main interrupt vector)
+// Placeholder for the global PCD handle if not defined elsewhere (e.g., from CubeMX)
+PCD_HandleTypeDef hpcd_USB_OTG_FS;
+
+// USB interrupt handler (needs to be called from the main interrupt vector)
 void USB_OTG_FS_IRQHandler(void) {
-    HAL_PCD_IRQHandler(get_pcd_handle());
+    HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
 }
 
 // HAL PCD Callbacks
@@ -295,8 +299,9 @@ void HAL_PCD_DataOutStageCallback(PCD_HandleTypeDef *hpcd, uint8_t epnum) {
 
 void HAL_PCD_DataInStageCallback(PCD_HandleTypeDef *hpcd, uint8_t epnum) {
     if (hpcd->Instance == USB_OTG_FS && epnum == (HID_KEYBOARD_IN_EP & 0x7F)) {
-        // Data IN transfer completed on endpoint 0x81
-        // You might want to signal completion or prepare for the next transfer here.
+        // Data IN transfer completed on HID_KEYBOARD_IN_EP.
+        // No specific action needed here for this example,
+        // but in a complex USB driver, this could signal a TX complete event.
     }
 }
 
