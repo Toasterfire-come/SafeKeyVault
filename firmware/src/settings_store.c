@@ -9,7 +9,7 @@
 #include "security_utils.h"
 #include "security_policy.h"
 #include "storage_backend.h"
-#include "build_config.h"
+#include "build_config.h" // For FIRMWARE_PRODUCTION
 
 typedef struct {
   bool initialized;
@@ -81,7 +81,7 @@ void settings_store_init(void) {
   }
   (void)crypto_engine_set_device_secret(device_secret, sizeof(device_secret));
   // Bind a dummy public key for ATECC simulation. In production, this would be the actual device's public key.
-  (void)crypto_engine_bind_atecc_slot(ATECC608A_SLOT_ID_PUBKEY, default_atecc_pubkey, sizeof(default_atecc_pubkey));
+  (void)crypto_engine_bind_atecc_slot(ATECC608A_SLOT_PUBKEY, default_atecc_pubkey, sizeof(default_atecc_pubkey));
   security_secure_zero(device_secret, sizeof(device_secret));
   g_settings_store.initialized = true;
 }
@@ -92,7 +92,7 @@ bool settings_store_save(const runtime_settings_t *settings) {
   uint8_t nonce[12];
   uint8_t tag[16];
   size_t ciphertext_len = sizeof(g_settings_store.encrypted_payload);
-  uint8_t record[4u + sizeof(settings_blob_t) + sizeof(g_settings_store.encrypted_payload)];
+  uint8_t record[4u + sizeof(settings_blob_t) + STORAGE_BACKEND_MAX_PAYLOAD]; // Max possible size
   size_t record_len = 0u;
   if (!g_settings_store.initialized || settings == NULL) {
     return false;
@@ -161,19 +161,39 @@ bool settings_store_load(runtime_settings_t *settings) {
   if (g_settings_store.encrypted_payload_len == 0u) {
     memset(record, 0, sizeof(record));
     if (!storage_backend_read_latest(record, sizeof(record), &record_len, &schema_version)) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Settings Store: Failed to read from storage backend.\n");
+#endif
       return false;
     }
     if (schema_version != SETTINGS_VERSION) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Settings Store: Schema version mismatch (Storage: %u, Expected: %u).\n", schema_version, SETTINGS_VERSION);
+#endif
       return false; // Schema mismatch
     }
     if (record_len < (4u + sizeof(settings_blob_t))) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Settings Store: Read record too short (%zu bytes).\n", record_len);
+#endif
       return false; // Record too short
     }
     memcpy(&stored_payload_len, record, sizeof(stored_payload_len));
     if (stored_payload_len == 0u || stored_payload_len > sizeof(g_settings_store.encrypted_payload)) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Settings Store: Invalid stored payload length (%u).\n", stored_payload_len);
+#endif
       return false; // Invalid payload length
     }
     if (record_len != (4u + sizeof(settings_blob_t) + stored_payload_len)) {
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Settings Store: Record length mismatch (Expected: %zu, Actual: %zu).\n", (4u + sizeof(settings_blob_t) + stored_payload_len), record_len);
+#endif
       return false; // Record length mismatch
     }
     memcpy(&g_settings_store.blob, record + 4u, sizeof(settings_blob_t));
@@ -186,22 +206,34 @@ bool settings_store_load(runtime_settings_t *settings) {
   blob = g_settings_store.blob;
 
   if (blob.version != SETTINGS_VERSION) {
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Settings Store: Blob version mismatch (Storage: %u, Expected: %u).\n", blob.version, SETTINGS_VERSION);
+#endif
     return false; // Version mismatch
   }
   settings_store_nonce(&blob, nonce);
   if (!crypto_engine_decrypt_aead(g_settings_store.encrypted_payload,
                                   g_settings_store.encrypted_payload_len,
                                   nonce, sizeof(nonce),
-                                  blob.hmac_tag,
+                                  blob.hmac_tag, // Pass the tag from the blob
                                   plaintext, sizeof(plaintext),
                                   &plaintext_len)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Settings Store: Decryption or tag verification failed.\n");
+#endif
     return false; // Decryption/authentication failed
   }
   if (plaintext_len != sizeof(settings_blob_t)) {
     security_secure_zero(plaintext, sizeof(plaintext));
     security_secure_zero(nonce, sizeof(nonce));
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Settings Store: Decrypted data size mismatch (Expected: %zu, Actual: %zu).\n", sizeof(settings_blob_t), plaintext_len);
+#endif
     return false; // Decrypted data size mismatch
   }
   memcpy(&blob, plaintext, sizeof(blob));
@@ -210,6 +242,10 @@ bool settings_store_load(runtime_settings_t *settings) {
 
   expected_crc = settings_crc(&blob.settings);
   if (expected_crc != blob.crc32) {
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Settings Store: CRC mismatch (Expected: 0x%08X, Actual: 0x%08X).\n", expected_crc, blob.crc32);
+#endif
     return false; // CRC mismatch indicates data corruption
   }
 

@@ -1,5 +1,6 @@
 #include "platform_hal.h"
 #include "stm32u5xx_hal.h" // Include the main HAL header
+#include "build_config.h" // For FIRMWARE_PRODUCTION
 
 // Forward declarations for peripheral initialization functions
 void SystemClock_Config(void);
@@ -401,22 +402,171 @@ bool platform_hal_usb_hid_type(const char *text) {
         0x7F  // Reserved (0x7F)
     };
 
-    // USB HID Keyboard Report format:
-    // Byte 0: Modifier byte (Left Ctrl, Left Shift, Left Alt, Left GUI, Right Ctrl, Right Shift, Right Alt, Right GUI)
-    // Byte 1-7: Key codes for up to 6 simultaneously pressed keys. 0x00 means no key.
+    // Key codes for special characters (Shift + number/symbol)
+    // This mapping is incomplete and assumes standard US keyboard layout.
+    const uint8_t shifted_ascii_to_hid_map[] = {
+        0x00, // Null
+        0x00, // ESC (no shift)
+        0x02, // ! (Shift + 1)
+        0x03, // @ (Shift + 2)
+        0x04, // # (Shift + 3)
+        0x05, // $ (Shift + 4)
+        0x06, // % (Shift + 5)
+        0x07, // ^ (Shift + 6)
+        0x08, // & (Shift + 7)
+        0x09, // * (Shift + 8)
+        0x0A, // ( (Shift + 9)
+        0x0B, // ) (Shift + 0)
+        0x0C, // _ (Shift + -)
+        0x0D, // + (Shift + =)
+        0x0E, // Backspace
+        0x0F, // TAB
+        0x10, // Q
+        0x11, // W
+        0x12, // E
+        0x13, // R
+        0x14, // T
+        0x15, // Y
+        0x16, // U
+        0x17, // I
+        0x18, // O
+        0x19, // P
+        0x1A, // { (Shift + [)
+        0x1B, // } (Shift + ])
+        0x1C, // ENTER
+        0x1D, // Left Control
+        0x1E, // A
+        0x1F, // S
+        0x20, // D
+        0x21, // F
+        0x22, // G
+        0x23, // H
+        0x24, // J
+        0x25, // K
+        0x26, // L
+        0x27, // : (Shift + ;)
+        0x28, // " (Shift + ')
+        0x29, // ~ (Shift + `)
+        0x2A, // Left Shift
+        0x2B, // | (Shift + \)
+        0x2C, // Z
+        0x2D, // X
+        0x2E, // C
+        0x2F, // V
+        0x30, // B
+        0x31, // N
+        0x32, // M
+        0x33, // < (Shift + ,)
+        0x34, // > (Shift + .)
+        0x35, // ? (Shift + /)
+        0x36, // Right Shift
+        0x37, // Keypad *
+        0x38, // Left Alt
+        0x39, // Space
+        0x3A, // Caps Lock
+        0x3B, // F1
+        0x3C, // F2
+        0x3D, // F3
+        0x3E, // F4
+        0x3F, // F5
+        0x40, // F6
+        0x41, // F7
+        0x42, // F8
+        0x43, // F9
+        0x44, // F10
+        0x45, // F11
+        0x46, // F12
+        0x47, // Print Screen
+        0x48, // Scroll Lock
+        0x49, // Pause
+        0x4A, // Insert
+        0x4B, // Home
+        0x4C, // Page Up
+        0x4D, // Delete
+        0x4E, // End
+        0x4F, // Page Down
+        0x50, // Right Arrow
+        0x51, // Left Arrow
+        0x52, // Down Arrow
+        0x53, // Up Arrow
+        0x54, // Num Lock
+        0x55, // Keypad /
+        0x56, // Keypad *
+        0x57, // Keypad -
+        0x58, // Keypad +
+        0x59, // Keypad Enter
+        0x5A, // Keypad 1
+        0x5B, // Keypad 2
+        0x5C, // Keypad 3
+        0x5D, // Keypad 4
+        0x5E, // Keypad 5
+        0x5F, // Keypad 6
+        0x60, // Keypad 7
+        0x61, // Keypad 8
+        0x62, // Keypad 9
+        0x63, // Keypad 0
+        0x64, // Keypad .
+        0x65, // Keypad Enter
+        0x66, // Keypad Enter
+        0x67, // Left GUI
+        0x68, // Right GUI
+        0x69, // Application
+        0x6A, // Left Control
+        0x6B, // Left Shift
+        0x6C, // Left Alt
+        0x6D, // Left GUI
+        0x6E, // Right Control
+        0x6F, // Right Shift
+        0x70, // Right Alt
+        0x71, // Right GUI
+        0x72, // Right Application
+        0x73, // Reserved (0x73)
+        0x74, // Reserved (0x74)
+        0x75, // Reserved (0x75)
+        0x76, // Reserved (0x76)
+        0x77, // Reserved (0x77)
+        0x78, // Reserved (0x78)
+        0x79, // Reserved (0x79)
+        0x7A, // Reserved (0x7A)
+        0x7B, // Reserved (0x7B)
+        0x7C, // Reserved (0x7C)
+        0x7D, // Reserved (0x7D)
+        0x7E, // Reserved (0x7E)
+        0x7F  // Reserved (0x7F)
+    };
 
     uint8_t report[8] = {0}; // Initialize report with all zeros (no keys pressed)
     uint8_t key_code = 0;
     bool success = true;
+    bool shift_pressed = false;
 
     for (size_t i = 0; text[i] != '\0'; ++i) {
         char current_char = text[i];
+        key_code = 0; // Reset key code for each character
 
-        if (current_char == '\t') {
+        if (current_char >= 'A' && current_char <= 'Z') {
+            // Uppercase letters require Shift
+            report[0] |= (1 << 1); // Set Left Shift modifier
+            shift_pressed = true;
+            key_code = ascii_to_hid_map[(uint8_t)current_char - 'A' + 'a']; // Use lowercase mapping
+        } else if (current_char >= 'a' && current_char <= 'z') {
+            key_code = ascii_to_hid_map[(uint8_t)current_char];
+        } else if (current_char == '\t') {
             key_code = ascii_to_hid_map[15]; // TAB key code
         } else if (current_char == '\n' || current_char == '\r') {
             key_code = ascii_to_hid_map[28]; // ENTER key code
         } else if (current_char >= ' ' && current_char <= '~') { // Printable ASCII characters
+            // Check if the character requires Shift
+            if (current_char >= '!' && current_char <= '/') { // Symbols on top row
+                report[0] |= (1 << 1); // Set Left Shift modifier
+                shift_pressed = true;
+            } else if (current_char >= ':' && current_char <= '?') { // Symbols on right side
+                report[0] |= (1 << 1); // Set Left Shift modifier
+                shift_pressed = true;
+            } else if (current_char >= '{' && current_char <= '~') { // Symbols on bottom row
+                report[0] |= (1 << 1); // Set Left Shift modifier
+                shift_pressed = true;
+            }
             key_code = ascii_to_hid_map[(uint8_t)current_char];
         } else {
             // Unsupported character, skip or handle as error
@@ -434,12 +584,22 @@ bool platform_hal_usb_hid_type(const char *text) {
 
             // Release the key
             report[2] = 0x00; // Clear the key code to release the key
+            if (shift_pressed) {
+                report[0] &= ~(1 << 1); // Clear Left Shift modifier
+            }
             if (HAL_PCD_Send_Report(&hpcd_USB_OTG_FS, report, sizeof(report)) != HAL_OK) {
                 success = false;
                 break;
             }
             HAL_Delay(8); // Delay after releasing the key
         }
+        shift_pressed = false; // Reset shift state for the next character
+    }
+
+    // Ensure all modifiers are released at the end
+    if (shift_pressed) {
+        report[0] &= ~(1 << 1);
+        HAL_PCD_Send_Report(&hpcd_USB_OTG_FS, report, sizeof(report));
     }
 
     return success;
@@ -583,6 +743,10 @@ HAL_StatusTypeDef HAL_PCD_Send_Report(PCD_HandleTypeDef *hpcd, uint8_t *report, 
     (void)hpcd; // Suppress unused parameter warning
     (void)report; // Suppress unused parameter warning
     (void)len; // Suppress unused parameter warning
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("USB HID Report Sent: %d bytes\n", len);
+#endif
     return HAL_OK;
 }
 
@@ -720,6 +884,10 @@ HAL_StatusTypeDef HAL_RCCEx_PeriphCLKConfig(const RCC_PeriphCLKInitTypeDef *Peri
 void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState) {
     (void)GPIOx; (void)GPIO_Pin; (void)PinState; // Suppress unused parameter warnings
     // In a real system, this would write to the GPIO pin.
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("GPIO Write: Pin %d, State %d\n", GPIO_Pin, PinState);
+#endif
 }
 
 // Dummy implementation for HAL_GPIO_ReadPin
@@ -791,6 +959,10 @@ void assert_param(int condition) {
     if (!condition) {
         // In a real application, this would handle assertion failures.
         // For this example, we'll just loop infinitely.
+#if !FIRMWARE_PRODUCTION
+        // Example debug logging:
+        // printf("Assertion failed!\n");
+#endif
         while(1);
     }
 }

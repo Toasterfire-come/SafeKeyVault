@@ -8,6 +8,7 @@
 #include "security_utils.h"
 #include "spi_hal.h" // Assuming SPI HAL for flash access
 #include "atecc608a_driver.h" // Assuming ATECC608A driver
+#include "build_config.h" // For FIRMWARE_PRODUCTION
 
 // Define the size of the ECDSA P-256 signature (64 bytes for R and S components)
 #define ECDSA_P256_SIGNATURE_LEN 64u
@@ -41,11 +42,19 @@ static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN])
 
     // Read the last flash sector
     if (spi_hal_read_sector(FLASH_LAST_SECTOR_ADDRESS, flash_sector_buffer, sizeof(flash_sector_buffer), &bytes_read) != SPI_HAL_SUCCESS) {
+#if !FIRMWARE_PRODUCTION
+        // Example debug logging:
+        // printf("Secure Boot: Failed to read firmware signature from flash.\n");
+#endif
         return false; // Failed to read flash sector
     }
 
     // Extract the signature from the buffer
     if (bytes_read < (FIRMWARE_SIGNATURE_OFFSET + ECDSA_P256_SIGNATURE_LEN)) {
+#if !FIRMWARE_PRODUCTION
+        // Example debug logging:
+        // printf("Secure Boot: Not enough data in flash sector for signature.\n");
+#endif
         return false; // Not enough data in the sector for the signature
     }
     memcpy(signature, flash_sector_buffer + FIRMWARE_SIGNATURE_OFFSET, ECDSA_P256_SIGNATURE_LEN);
@@ -63,6 +72,10 @@ static bool read_version_from_atecc(uint32_t *version) {
         memcpy(version, version_data, VERSION_COUNTER_LEN);
         return true;
     }
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Secure Boot: Failed to read version counter from ATECC.\n");
+#endif
     return false; // Indicate failure to read
 }
 
@@ -77,6 +90,10 @@ static bool write_version_to_atecc(uint32_t version) {
     if (atecc608a_write_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
         return true;
     }
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Secure Boot: Failed to write version counter to ATECC.\n");
+#endif
     return false; // Indicate failure to write
 }
 
@@ -141,6 +158,10 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
     return false;
   }
   if (payload_hash_len != FIRMWARE_HASH_LEN) {
+#if !FIRMWARE_PRODUCTION
+    // Example debug logging:
+    // printf("Secure Boot: Payload hash length mismatch (%zu != %d).\n", payload_hash_len, FIRMWARE_HASH_LEN);
+#endif
     return false; // Hash length mismatch
   }
 
@@ -149,6 +170,10 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
     if (!g_secure_boot.signing_key_set) {
       // Signing public key not set, cannot verify signature
       out_result->signature_valid = false;
+#if !FIRMWARE_PRODUCTION
+      // Example debug logging:
+      // printf("Secure Boot: Signature verification failed - signing key not set.\n");
+#endif
     } else {
       // Read signature from the last flash sector
       if (read_firmware_signature(firmware_signature)) {
@@ -163,6 +188,12 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
         }
       }
       out_result->signature_valid = signature_ok;
+#if !FIRMWARE_PRODUCTION
+      if (!signature_ok) {
+          // Example debug logging:
+          // printf("Secure Boot: Signature verification failed.\n");
+      }
+#endif
     }
   } else {
     out_result->signature_valid = true; // Signature enforcement is disabled
@@ -184,6 +215,12 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
         }
     }
     out_result->antirollback_ok = rollback_ok;
+#if !FIRMWARE_PRODUCTION
+    if (!rollback_ok) {
+        // Example debug logging:
+        // printf("Secure Boot: Anti-rollback check failed (Manifest version: %u, Stored version: %u).\n", manifest->version, stored_version);
+    }
+#endif
   } else {
     out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled
   }
@@ -197,6 +234,10 @@ bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
           // Failed to update version counter, this is a critical error.
           // The device might enter a locked state or require manual intervention.
           out_result->accepted = false; // Reject if version update fails
+#if !FIRMWARE_PRODUCTION
+          // Example debug logging:
+          // printf("Secure Boot: CRITICAL - Failed to update version counter after acceptance.\n");
+#endif
       }
   }
 

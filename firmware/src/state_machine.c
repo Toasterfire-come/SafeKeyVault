@@ -9,6 +9,7 @@
 #include "password_store.h"
 #include "security_utils.h"
 #include "pcd_hal.h" // Assuming PCD HAL for USB disconnect handling
+#include "build_config.h" // For FIRMWARE_PRODUCTION
 
 #define LOCKOUT_TICKS_BASE 3u
 #define LOCKOUT_TICKS_STEP 2u
@@ -24,6 +25,10 @@ static runtime_settings_t g_settings = {
 };
 static uint8_t g_pin_verifier[16];
 static bool g_pin_verifier_set = false;
+
+// Assume g_device_context is a global variable accessible by state_machine_on_usb_disconnect
+// In a real application, this might be passed as a parameter or managed differently.
+extern device_context_t g_device_context;
 
 static void reset_unlock_session(device_context_t *ctx) {
     ctx->unlocked = false;
@@ -140,6 +145,10 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
 
     // PIN verifier must be set. If not, we cannot proceed.
     if (!g_pin_verifier_set) {
+#if !FIRMWARE_PRODUCTION
+        // Example debug logging:
+        // printf("State Machine: PIN verifier not set, cannot unlock.\n");
+#endif
         security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
         return false;
     }
@@ -170,11 +179,19 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
             ctx->wiped = true;
             ctx->state = DEVICE_LOCKED_OUT;
             ctx->lockout_ticks_remaining = 0u;
+#if !FIRMWARE_PRODUCTION
+            // Example debug logging:
+            // printf("State Machine: Device wiped due to excessive failed PIN attempts.\n");
+#endif
         } else if (ctx->failed_pin_attempts >= g_settings.pin_attempt_limit) {
             // Calculate lockout duration based on attempts beyond the initial limit
             unsigned int lockout_attempts_exceeded = ctx->failed_pin_attempts - g_settings.pin_attempt_limit;
             ctx->state = DEVICE_LOCKED_OUT;
             ctx->lockout_ticks_remaining = LOCKOUT_TICKS_BASE + (lockout_attempts_exceeded * LOCKOUT_TICKS_STEP);
+#if !FIRMWARE_PRODUCTION
+            // Example debug logging:
+            // printf("State Machine: Device locked out for %u ticks due to failed PIN attempts.\n", ctx->lockout_ticks_remaining);
+#endif
         }
     }
 
@@ -401,7 +418,6 @@ void state_machine_on_usb_disconnect(void) {
     // This assumes 'g_device_context' is a globally accessible device_context_t.
     // If not, this function needs to be passed the context or have it accessible.
     // For now, assuming a global context for simplicity.
-    extern device_context_t g_device_context; // Declare if global
     state_machine_lock(&g_device_context);
 }
 
