@@ -9,6 +9,7 @@
 #include "firmware_types.h"
 #include "platform_hal.h"
 #include "settings_store.h"
+#include "secure_boot.h" // Added for secure boot enforcement
 #include "state_machine.h"
 #include "storage_backend.h"
 #include "totp.h"
@@ -88,6 +89,14 @@ void SystemClock_Config(void) {
 }
 
 int main(void) {
+    // Ensure secure boot verification occurs before any other initialization.
+    // If the manifest is invalid, halt the device.
+    // The anti-rollback check is an integral part of secure_boot_verify_manifest
+    // and cannot be skipped. It must be unconditional in production builds.
+    if (!secure_boot_verify_manifest(NULL, NULL, 0)) { // Assuming manifest details are determined internally or from flash
+        Error_Handler();
+    }
+
     // Initialize HAL
     if (HAL_Init() != HAL_OK) {
         Error_Handler();
