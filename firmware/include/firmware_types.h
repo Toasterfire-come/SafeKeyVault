@@ -12,6 +12,11 @@
 #define MAX_STORED_CREDENTIALS 64
 #define PASSWORD_FINGERPRINT_BYTES 32
 
+// New settings added to runtime_settings_t
+#define PIN_ATTEMPT_LIMIT_3 3u
+#define PIN_ATTEMPT_LIMIT_5 5u
+#define PIN_ATTEMPT_LIMIT_10 10u
+
 typedef enum {
     DEVICE_LOCKED = 0,
     DEVICE_UNLOCKED,
@@ -44,11 +49,21 @@ typedef struct {
 } password_policy_t;
 
 typedef struct {
+    // Existing settings
     bool auto_popup_enabled;
     bool manual_popup_requires_touch;
     bool require_touch_for_fill;
     bool hold_required_for_selection;
     uint16_t autolock_seconds;
+
+    // New settings
+    uint8_t pin_attempt_limit;       // 3/5/10
+    bool wipe_on_lockout;
+    bool passkeys_enabled;
+    bool totp_enabled;
+    uint8_t default_account_index;
+    bool auto_type_on_plugin;
+    uint8_t totp_display_mode;       // e.g., 0 for default, 1 for compact, etc.
 } runtime_settings_t;
 
 typedef struct {
