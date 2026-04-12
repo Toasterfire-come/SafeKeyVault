@@ -7,24 +7,47 @@
   },
   "configurePresets": [
     {
+      "name": "debug",
+      "displayName": "Firmware debug",
+      "description": "Debug build with FIRMWARE_PRODUCTION=0",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/firmware/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "FIRMWARE_PRODUCTION": "0"
+      }
+    },
+    {
       "name": "prod",
       "displayName": "Firmware production",
-      "description": "Production hardened firmware build",
+      "description": "Production hardened firmware build with FIRMWARE_PRODUCTION=1 and NDEBUG",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/firmware/build-prod",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "FIRMWARE_PRODUCTION": "ON"
+        "FIRMWARE_PRODUCTION": "1",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG"
       }
     }
   ],
   "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
     {
       "name": "prod",
       "configurePreset": "prod"
     }
   ],
   "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
     {
       "name": "prod",
       "configurePreset": "prod",
