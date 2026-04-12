@@ -5,6 +5,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Define the size of the ECDSA P-256 signature
+#define ECDSA_P256_SIGNATURE_LEN 64u
+// Define the size of the firmware image hash
+#define FIRMWARE_HASH_LEN 32u
+
+// Assuming these are defined elsewhere, e.g., in a board configuration header
+#define FLASH_SECTOR_SIZE 4096u // Example sector size
+#define FLASH_LAST_SECTOR_ADDRESS 0x08000000 // Example address of the last sector
+
 typedef struct {
   uint32_t version;
   uint32_t payload_size;

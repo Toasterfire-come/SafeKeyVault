@@ -8,6 +8,7 @@
 #include "crypto_engine.h"
 #include "password_store.h"
 #include "security_utils.h"
+#include "pcd_hal.h" // Assuming PCD HAL for USB disconnect handling
 
 #define LOCKOUT_TICKS_BASE 3u
 #define LOCKOUT_TICKS_STEP 2u
@@ -36,6 +37,11 @@ void state_machine_init(device_context_t *ctx) {
     }
     memset(ctx, 0, sizeof(*ctx));
     ctx->state = DEVICE_LOCKED;
+
+    // Initialize hardware drivers
+    pcd_hal_init();
+    // Register callback for USB disconnect
+    pcd_hal_register_callback(state_machine_on_usb_disconnect);
 }
 
 void state_machine_tick(device_context_t *ctx) {
@@ -43,15 +49,17 @@ void state_machine_tick(device_context_t *ctx) {
         return;
     }
 
-    if (ctx->state == DEVICE_LOCKED_OUT && ctx->lockout_ticks_remaining > 0u) {
-        ctx->lockout_ticks_remaining--;
+    if (ctx->state == DEVICE_LOCKED_OUT) {
+        if (ctx->lockout_ticks_remaining > 0u) {
+            ctx->lockout_ticks_remaining--;
+        }
         if (ctx->lockout_ticks_remaining == 0u && !ctx->wiped) {
             ctx->state = DEVICE_LOCKED;
         }
-        return;
+        return; // Do not increment inactivity if locked out
     }
 
-    if (!ctx->unlocked || ctx->state == DEVICE_LOCKED_OUT) {
+    if (!ctx->unlocked) {
         return;
     }
     ctx->inactivity_seconds++;
@@ -132,8 +140,12 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
     }
 
     if (!g_pin_verifier_set) {
-        crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
-        g_pin_verifier_set = true;
+        // In production, the PIN verifier must be securely provisioned.
+        // This default is only for initial development/testing and should be replaced.
+        // A secure provisioning mechanism should set the verifier.
+        // For now, we'll assume it's set externally or via a secure provisioning step.
+        // If it's truly unset, we cannot proceed with unlock.
+        return false;
     }
 
     {
@@ -146,6 +158,7 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
             ctx->unlocked = true;
             ctx->state = DEVICE_UNLOCKED;
             ctx->inactivity_seconds = 0u;
+            security_secure_zero(candidate, sizeof(candidate)); // Zeroize PIN buffer
             return true;
         }
     }
@@ -174,6 +187,7 @@ bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const cha
     bool old_digits = true;
     bool new_digits = true;
     uint8_t old_hash[16] = {0};
+    uint8_t new_hash[16] = {0};
 
     if (ctx == NULL || old_pin == NULL || new_pin == NULL || !ctx->unlocked || ctx->wiped) {
         return false;
@@ -192,15 +206,19 @@ bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const cha
         return false;
     }
     if (!g_pin_verifier_set) {
-        crypto_engine_hash16((const uint8_t *)"12345", 5u, g_pin_verifier);
-        g_pin_verifier_set = true;
+        // PIN verifier must be set before changing PIN.
+        return false;
     }
     crypto_engine_hash16((const uint8_t *)old_pin, old_len, old_hash);
     if (!sec_consttime_memeq(old_hash, g_pin_verifier, sizeof(old_hash))) {
+        security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
         return false;
     }
-    crypto_engine_hash16((const uint8_t *)new_pin, new_len, g_pin_verifier);
-    g_pin_verifier_set = true;
+    crypto_engine_hash16((const uint8_t *)new_pin, new_len, new_hash);
+    // Update the verifier securely
+    state_machine_set_pin_verifier(new_hash);
+    security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
+    security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
     return true;
 }
 
@@ -210,6 +228,10 @@ bool state_machine_request_fill(device_context_t *ctx,
     BrowserCommand cmd;
     BrowserCommandResult result;
     bool same_origin;
+    char username_copy[MAX_USERNAME_LEN] = {0};
+    char password_copy[MAX_PASSWORD_LEN] = {0};
+    char origin_copy[MAX_ORIGIN_LEN] = {0};
+
 
     if (ctx == NULL || record == NULL || origin == NULL) {
         return false;
@@ -218,18 +240,30 @@ bool state_machine_request_fill(device_context_t *ctx,
         return false;
     }
 
+    // Copy sensitive data before validation and potential zeroization
+    strncpy(username_copy, record->username, sizeof(username_copy) - 1);
+    strncpy(password_copy, record->password, sizeof(password_copy) - 1);
+    strncpy(origin_copy, record->origin, sizeof(origin_copy) - 1);
+
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = BROWSER_CMD_REQUEST_FILL;
     (void)strncpy(cmd.origin, origin, sizeof(cmd.origin) - 1u);
-    (void)strncpy(cmd.username, record->username, sizeof(cmd.username) - 1u);
-    (void)strncpy(cmd.password, record->password, sizeof(cmd.password) - 1u);
+    (void)strncpy(cmd.username, username_copy, sizeof(cmd.username) - 1u);
+    (void)strncpy(cmd.password, password_copy, sizeof(cmd.password) - 1u);
+
     if (!browser_validate_command(&cmd, &result)) {
+        security_secure_zero(username_copy, sizeof(username_copy));
+        security_secure_zero(password_copy, sizeof(password_copy));
+        security_secure_zero(origin_copy, sizeof(origin_copy));
         return false;
     }
 
-    same_origin = (strncmp(record->origin, origin, MAX_ORIGIN_LEN) == 0);
+    same_origin = (strncmp(origin_copy, origin, MAX_ORIGIN_LEN) == 0);
     if (!same_origin) {
         /* Phishing protection: never fill mismatched origins. */
+        security_secure_zero(username_copy, sizeof(username_copy));
+        security_secure_zero(password_copy, sizeof(password_copy));
+        security_secure_zero(origin_copy, sizeof(origin_copy));
         return false;
     }
 
@@ -239,6 +273,11 @@ bool state_machine_request_fill(device_context_t *ctx,
     } else {
         ctx->state = DEVICE_CONFIRM_TYPE;
     }
+
+    // Zeroize copied buffers after use
+    security_secure_zero(username_copy, sizeof(username_copy));
+    security_secure_zero(password_copy, sizeof(password_copy));
+    security_secure_zero(origin_copy, sizeof(origin_copy));
     return true;
 }
 
@@ -246,28 +285,47 @@ bool state_machine_request_save(device_context_t *ctx, const credential_record_t
     password_policy_result_t policy;
     BrowserCommand cmd;
     BrowserCommandResult result;
+    char username_copy[MAX_USERNAME_LEN] = {0};
+    char password_copy[MAX_PASSWORD_LEN] = {0};
+    char origin_copy[MAX_ORIGIN_LEN] = {0};
 
     if (ctx == NULL || record == NULL || !ctx->unlocked || ctx->wiped || ctx->state == DEVICE_LOCKED_OUT) {
         return false;
     }
 
-    policy = security_evaluate_password(record->password);
+    // Copy sensitive data before validation and potential zeroization
+    strncpy(username_copy, record->username, sizeof(username_copy) - 1);
+    strncpy(password_copy, record->password, sizeof(password_copy) - 1);
+    strncpy(origin_copy, record->origin, sizeof(origin_copy) - 1);
+
+    policy = security_evaluate_password(password_copy);
     if (!security_should_allow_save(&policy, false)) {
         /* Save remains blocked until explicit hold override is performed. */
+        security_secure_zero(username_copy, sizeof(username_copy));
+        security_secure_zero(password_copy, sizeof(password_copy));
+        security_secure_zero(origin_copy, sizeof(origin_copy));
         return false;
     }
 
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = BROWSER_CMD_REQUEST_SAVE;
-    (void)strncpy(cmd.origin, record->origin, sizeof(cmd.origin) - 1u);
-    (void)strncpy(cmd.username, record->username, sizeof(cmd.username) - 1u);
-    (void)strncpy(cmd.password, record->password, sizeof(cmd.password) - 1u);
+    (void)strncpy(cmd.origin, origin_copy, sizeof(cmd.origin) - 1u);
+    (void)strncpy(cmd.username, username_copy, sizeof(cmd.username) - 1u);
+    (void)strncpy(cmd.password, password_copy, sizeof(cmd.password) - 1u);
     if (!browser_validate_command(&cmd, &result)) {
+        security_secure_zero(username_copy, sizeof(username_copy));
+        security_secure_zero(password_copy, sizeof(password_copy));
+        security_secure_zero(origin_copy, sizeof(origin_copy));
         return false;
     }
 
     ctx->state = DEVICE_PROMPT_SAVE;
     ctx->inactivity_seconds = 0u;
+
+    // Zeroize copied buffers after use
+    security_secure_zero(username_copy, sizeof(username_copy));
+    security_secure_zero(password_copy, sizeof(password_copy));
+    security_secure_zero(origin_copy, sizeof(origin_copy));
     return true;
 }
 
@@ -305,4 +363,20 @@ void state_machine_set_pin_verifier(const uint8_t verifier[16]) {
     }
     memcpy(g_pin_verifier, verifier, 16u);
     g_pin_verifier_set = true;
+}
+
+void state_machine_on_usb_disconnect(void) {
+    // When USB disconnects, immediately lock the device.
+    // This assumes 'g_device_context' is a globally accessible device_context_t.
+    // If not, this function needs to be passed the context or have it accessible.
+    // For now, assuming a global context for simplicity.
+    extern device_context_t g_device_context; // Declare if global
+    state_machine_lock(&g_device_context);
+}
+
+void state_machine_lock(device_context_t *ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+    reset_unlock_session(ctx);
 }

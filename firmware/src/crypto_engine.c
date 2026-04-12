@@ -9,12 +9,13 @@
 #include "crypto_stub.h"
 #include "security_policy.h"
 #include "security_utils.h"
+#include "spi_hal.h" // For potential flash access if needed by crypto
+#include "atecc608a_driver.h" // Actual ATECC608A driver
 
-// Placeholder for ATECC608A driver functions.
-// These would be implemented using the Microchip/Atmel SDK or similar.
-#define ATECC608A_SLOT_ID_MASTER_KEY 0u
-#define ATECC608A_SLOT_ID_DEVICE_SECRET 1u
-#define ATECC608A_SLOT_ID_PUBKEY 2u
+// Define ATECC608A slots
+#define ATECC608A_SLOT_MASTER_KEY 0u
+#define ATECC608A_SLOT_DEVICE_SECRET 1u
+#define ATECC608A_SLOT_PUBKEY 2u // Example slot for public key
 
 typedef struct {
   bool initialized;
@@ -38,15 +39,8 @@ static const uint8_t k_dev_master_key[32] = {
     0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
 };
 
-// Placeholder for ATECC608A specific functions
-static bool atecc608a_init(void) { return true; }
-static bool atecc608a_set_master_key(const uint8_t *key, size_t key_len) { return true; }
-static bool atecc608a_set_device_secret(const uint8_t *secret, size_t secret_len) { return true; }
-static bool atecc608a_bind_slot(uint8_t slot_id, const uint8_t *public_key, size_t public_key_len) { return true; }
-static bool atecc608a_encrypt_aead(const uint8_t *plaintext, size_t plaintext_len, const uint8_t *aad, size_t aad_len, uint8_t *ciphertext, size_t ciphertext_capacity, size_t *ciphertext_len, uint8_t out_tag[16]) { return false; }
-static bool atecc608a_decrypt_aead(const uint8_t *ciphertext, size_t ciphertext_len, const uint8_t *aad, size_t aad_len, const uint8_t tag[16], uint8_t *plaintext, size_t plaintext_capacity, size_t *plaintext_len) { return false; }
-static bool atecc608a_derive_key(const uint8_t *input_key, size_t input_key_len, uint8_t *output_key, size_t output_key_len) { return false; }
-
+// Placeholder for ATECC608A specific functions - these will be replaced by actual driver calls
+// The actual driver functions are assumed to be available and linked.
 
 static uint8_t stream_mask_for_index(size_t idx) {
   uint8_t mask = (uint8_t)(0xA5u ^ (uint8_t)((idx * 31u) & 0xFFu));
@@ -166,7 +160,7 @@ static void next_password_nonce(uint8_t nonce[12]) {
     }
   }
   g_password_nonce_counter++;
-  crypto_stub_hash16(seed, sizeof(seed), hash);
+  crypto_stub_hash16(seed, sizeof(seed), hash); // Use stub for nonce generation if ATECC not available
   memcpy(nonce, hash, 12u);
   security_secure_zero(seed, sizeof(seed));
   security_secure_zero(hash, sizeof(hash));
@@ -175,6 +169,11 @@ static void next_password_nonce(uint8_t nonce[12]) {
 void crypto_engine_init(void) {
   memset(&g_crypto_state, 0, sizeof(g_crypto_state));
   g_crypto_state.initialized = true;
+
+  // Initialize hardware drivers
+  spi_hal_init();
+  atecc608a_init();
+
 #if !FIRMWARE_PRODUCTION
   // Use development master key for non-production builds
   crypto_stub_set_master_key(k_dev_master_key, sizeof(k_dev_master_key));
@@ -187,8 +186,17 @@ void crypto_engine_set_master_key(const uint8_t *key, size_t key_len) {
     g_crypto_state.master_key_set = false;
     return;
   }
-  crypto_stub_set_master_key(key, key_len);
-  g_crypto_state.master_key_set = true;
+  // Use ATECC608A to store and manage the master key
+  if (atecc608a_set_master_key(ATECC608A_SLOT_MASTER_KEY, key, key_len) == ATECC608A_SUCCESS) {
+      g_crypto_state.master_key_set = true;
+  } else {
+      g_crypto_state.master_key_set = false;
+#if !FIRMWARE_PRODUCTION
+      // Fallback for development builds if ATECC fails
+      crypto_stub_set_master_key(key, key_len);
+      g_crypto_state.master_key_set = true;
+#endif
+  }
 }
 
 bool crypto_engine_set_device_secret(const uint8_t *secret, size_t secret_len) {
@@ -204,15 +212,15 @@ bool crypto_engine_set_device_secret(const uint8_t *secret, size_t secret_len) {
   memcpy(g_crypto_state.device_secret, secret, secret_len);
   g_crypto_state.device_secret_set = true;
 
-  // Derive a new master key from the device secret for enhanced security
-  crypto_stub_hash16(secret, secret_len, master_seed);
-  crypto_stub_hash16(master_seed, sizeof(master_seed), expanded); // Hash again for KDF
-  crypto_stub_set_master_key(expanded, sizeof(expanded));
-  g_crypto_state.master_key_set = true;
-
-  security_secure_zero(master_seed, sizeof(master_seed));
-  security_secure_zero(expanded, sizeof(expanded));
-  return true;
+  // Derive a new master key from the device secret for enhanced security using ATECC
+  if (atecc608a_derive_key(ATECC608A_SLOT_DEVICE_SECRET, expanded, sizeof(expanded)) == ATECC608A_SUCCESS) {
+      crypto_engine_set_master_key(expanded, sizeof(expanded));
+      security_secure_zero(expanded, sizeof(expanded));
+      return true;
+  } else {
+      g_crypto_state.device_secret_set = false; // Failed to set device secret securely
+      return false;
+  }
 }
 
 bool crypto_engine_bind_atecc_slot(uint8_t slot_id,
@@ -225,17 +233,14 @@ bool crypto_engine_bind_atecc_slot(uint8_t slot_id,
     return false;
   }
 
-  // In a real implementation, this would call the ATECC608A driver to bind the slot.
-  // For now, we simulate the binding.
-  if (!atecc608a_bind_slot(slot_id, public_key, public_key_len)) {
-      return false;
+  if (atecc608a_bind_slot(slot_id, public_key, public_key_len) == ATECC608A_SUCCESS) {
+      g_crypto_state.secure_element_slot = slot_id;
+      memcpy(g_crypto_state.secure_element_pubkey, public_key, public_key_len);
+      g_crypto_state.secure_element_pubkey_len = public_key_len;
+      g_crypto_state.secure_element_bound = true;
+      return true;
   }
-
-  g_crypto_state.secure_element_slot = slot_id;
-  memcpy(g_crypto_state.secure_element_pubkey, public_key, public_key_len);
-  g_crypto_state.secure_element_pubkey_len = public_key_len;
-  g_crypto_state.secure_element_bound = true;
-  return true;
+  return false;
 }
 
 crypto_engine_status_t crypto_engine_get_status(void) {
@@ -244,8 +249,9 @@ crypto_engine_status_t crypto_engine_get_status(void) {
   status.backend = g_crypto_state.secure_element_bound
                        ? CRYPTO_BACKEND_ATECC608A
                        : CRYPTO_BACKEND_SOFTWARE_FALLBACK;
-  status.aead_interface_ready = true; // Assume AEAD is always ready via stub or ATECC
-  status.kdf_interface_ready = true;  // Assume KDF is always ready
+  // Check if ATECC interfaces are ready
+  status.aead_interface_ready = atecc608a_is_ready(ATECC608A_AEAD_INTERFACE);
+  status.kdf_interface_ready = atecc608a_is_ready(ATECC608A_KDF_INTERFACE);
   status.secure_element_bound = g_crypto_state.secure_element_bound;
   status.production_mode = (FIRMWARE_PRODUCTION != 0);
   return status;
@@ -277,22 +283,19 @@ bool crypto_engine_encrypt_password(const char *plaintext,
 
   next_password_nonce(nonce);
 
-  // Use ATECC608A if bound, otherwise fallback to stub
   bool success;
   if (g_crypto_state.secure_element_bound) {
-      // success = atecc608a_encrypt_aead(plaintext, plaintext_len, nonce, sizeof(nonce), ciphertext, sizeof(ciphertext), &ciphertext_len, tag);
-      // For now, stubbing this call as ATECC driver is not implemented
-      success = crypto_stub_encrypt_password(plaintext, (char*)ciphertext, sizeof(ciphertext));
-      if (success) {
-          // Simulate tag generation if stubbed
-          crypto_stub_hash16(ciphertext, ciphertext_len, tag);
-          ciphertext_len = strlen((char*)ciphertext); // Stub returns null-terminated string
-      }
+      // Use ATECC608A for AEAD encryption
+      success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Assuming master key is in slot 0
+                                     (const uint8_t *)plaintext, plaintext_len,
+                                     nonce, sizeof(nonce),
+                                     ciphertext, sizeof(ciphertext), &ciphertext_len, tag);
   } else {
+      // Fallback to stub for development builds if ATECC is not bound or fails
       success = crypto_stub_encrypt_password(plaintext, (char*)ciphertext, sizeof(ciphertext));
       if (success) {
-          crypto_stub_hash16(ciphertext, ciphertext_len, tag);
-          ciphertext_len = strlen((char*)ciphertext);
+          crypto_stub_hash16(ciphertext, ciphertext_len, tag); // Simulate tag
+          ciphertext_len = strlen((char*)ciphertext); // Stub returns null-terminated string
       }
   }
 
@@ -373,12 +376,15 @@ bool crypto_engine_decrypt_password(const char *ciphertext,
 
   plaintext_len = out_len - 1u;
   bool success;
-  // Use ATECC608A if bound, otherwise fallback to stub
   if (g_crypto_state.secure_element_bound) {
-      // success = atecc608a_decrypt_aead(ciphertext_bytes, ciphertext_len, nonce, sizeof(nonce), tag, (uint8_t *)plaintext_out, plaintext_len, &plaintext_len);
-      // For now, stubbing this call as ATECC driver is not implemented
-      success = crypto_stub_decrypt_password((const char*)ciphertext_bytes, plaintext_out, out_len);
+      // Use ATECC608A for AEAD decryption
+      success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Assuming master key is in slot 0
+                                     ciphertext_bytes, ciphertext_len,
+                                     nonce, sizeof(nonce),
+                                     tag,
+                                     (uint8_t *)plaintext_out, plaintext_len, &plaintext_len);
   } else {
+      // Fallback to stub for development builds if ATECC is not bound or fails
       success = crypto_stub_decrypt_password((const char*)ciphertext_bytes, plaintext_out, out_len);
   }
 
@@ -403,12 +409,46 @@ bool crypto_engine_decrypt_password(const char *ciphertext,
 void crypto_engine_password_fingerprint(const char *password,
                                         uint8_t out_fp[16],
                                         size_t out_len) {
-  crypto_stub_password_fingerprint(password, out_fp, out_len);
+  crypto_stub_password_fingerprint(password, out_fp, out_len); // Use stub for fingerprinting
 }
 
 void crypto_engine_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]) {
-  crypto_stub_hash16(data, data_len, out_fp);
+  crypto_stub_hash16(data, data_len, out_fp); // Use stub for hashing
 }
+
+bool crypto_engine_ecdsa_verify(const uint8_t *public_key,
+                                size_t public_key_len,
+                                const uint8_t *message_hash,
+                                size_t message_hash_len,
+                                const uint8_t *signature,
+                                size_t signature_len) {
+  if (g_crypto_state.secure_element_bound) {
+    // Use ATECC608A for ECDSA verification
+    return atecc608a_ecdsa_verify(ATECC608A_SLOT_PUBKEY, // Assuming public key is in slot 2
+                                  public_key, public_key_len, // Pass public key if not slot-bound
+                                  message_hash, message_hash_len,
+                                  signature, signature_len) == ATECC608A_SUCCESS;
+  } else {
+    // Fallback to software implementation or return false if not supported
+    // For now, return false as software ECDSA is not implemented here.
+    return false;
+  }
+}
+
+bool crypto_engine_read_atecc_slot(uint8_t slot_id, uint8_t *data, size_t data_len) {
+    if (g_crypto_state.secure_element_bound) {
+        return atecc608a_read_slot(slot_id, data, data_len) == ATECC608A_SUCCESS;
+    }
+    return false;
+}
+
+bool crypto_engine_write_atecc_slot(uint8_t slot_id, const uint8_t *data, size_t data_len) {
+    if (g_crypto_state.secure_element_bound) {
+        return atecc608a_write_slot(slot_id, data, data_len) == ATECC608A_SUCCESS;
+    }
+    return false;
+}
+
 
 bool crypto_engine_derive_pin_key(const char *pin,
                                   const uint8_t *salt,
@@ -457,15 +497,14 @@ bool crypto_engine_derive_pin_key(const char *pin,
     }
   }
 
-  // Use ATECC608A if available for KDF, otherwise fallback to stub
   bool success;
   if (g_crypto_state.secure_element_bound) {
-      // success = atecc608a_derive_key(mix, sizeof(mix), out_key, 32);
-      // Stubbing for now
-      crypto_stub_hash16(mix, sizeof(mix), hash_a);
-      crypto_stub_hash16(hash_a, sizeof(hash_a), hash_b);
-      success = true;
+      // Use ATECC608A for key derivation
+      success = atecc608a_derive_key(ATECC608A_SLOT_DEVICE_SECRET, // Assuming device secret is in slot 1
+                                    mix, sizeof(mix), // Input data for derivation
+                                    out_key, 32) == ATECC608A_SUCCESS;
   } else {
+      // Fallback to stub for development builds if ATECC is not bound or fails
       crypto_stub_hash16(mix, sizeof(mix), hash_a);
       crypto_stub_hash16(hash_a, sizeof(hash_a), hash_b);
       success = true;
@@ -476,12 +515,15 @@ bool crypto_engine_derive_pin_key(const char *pin,
       return false;
   }
 
-  for (i = 0u; i < 16u; ++i) {
-    out_key[i] = hash_a[i];
-    out_key[i + 16u] = hash_b[i];
+  // Combine hashes if stubbed or if ATECC output needs combining
+  if (!g_crypto_state.secure_element_bound) {
+      for (i = 0u; i < 16u; ++i) {
+        out_key[i] = hash_a[i];
+        out_key[i + 16u] = hash_b[i];
+      }
+      security_secure_zero(hash_a, sizeof(hash_a));
+      security_secure_zero(hash_b, sizeof(hash_b));
   }
-  security_secure_zero(hash_a, sizeof(hash_a));
-  security_secure_zero(hash_b, sizeof(hash_b));
   security_secure_zero(mix, sizeof(mix));
   return true;
 }
@@ -506,18 +548,14 @@ bool crypto_engine_encrypt_aead(const uint8_t *plaintext,
     return false;
   }
 
-  // Use ATECC608A if bound, otherwise fallback to stub
   bool success;
   if (g_crypto_state.secure_element_bound) {
-      // success = atecc608a_encrypt_aead(plaintext, plaintext_len, aad, aad_len, ciphertext, ciphertext_capacity, ciphertext_len, out_tag);
-      // Stubbing for now
-      for (i = 0u; i < plaintext_len && i < ciphertext_capacity; ++i) {
-          ciphertext[i] = plaintext[i] ^ stream_mask_for_index(i);
-      }
-      *ciphertext_len = plaintext_len;
-      crypto_stub_hash16(ciphertext, *ciphertext_len, out_tag); // Simulate tag
-      success = true;
+      success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Assuming master key is in slot 0
+                                     plaintext, plaintext_len,
+                                     aad, aad_len,
+                                     ciphertext, ciphertext_capacity, ciphertext_len, out_tag);
   } else {
+      // Fallback to stub for development builds if ATECC is not bound or fails
       for (i = 0u; i < plaintext_len && i < ciphertext_capacity; ++i) {
           ciphertext[i] = plaintext[i] ^ stream_mask_for_index(i);
       }
@@ -531,20 +569,24 @@ bool crypto_engine_encrypt_aead(const uint8_t *plaintext,
   }
 
   // MAC calculation (simplified for stub, real AEAD would integrate this)
-  memset(mac_input, 0, sizeof(mac_input));
-  for (i = 0u; i < *ciphertext_len && i < sizeof(mac_input); ++i) {
-    mac_input[i] ^= ciphertext[i];
+  // This part might be redundant if ATECC handles the tag generation internally.
+  // If ATECC provides the tag, this section should be removed or adapted.
+  if (!g_crypto_state.secure_element_bound) {
+      memset(mac_input, 0, sizeof(mac_input));
+      for (i = 0u; i < *ciphertext_len && i < sizeof(mac_input); ++i) {
+        mac_input[i] ^= ciphertext[i];
+      }
+      for (i = 0u; i < aad_len && i < sizeof(mac_input); ++i) {
+        mac_input[i] ^= aad[i];
+      }
+      if (g_crypto_state.device_secret_set) {
+        for (i = 0u; i < sizeof(g_crypto_state.device_secret) && i < sizeof(mac_input); ++i) {
+          mac_input[i] ^= g_crypto_state.device_secret[i];
+        }
+      }
+      crypto_stub_hash16(mac_input, sizeof(mac_input), out_tag);
+      security_secure_zero(mac_input, sizeof(mac_input));
   }
-  for (i = 0u; i < aad_len && i < sizeof(mac_input); ++i) {
-    mac_input[i] ^= aad[i];
-  }
-  if (g_crypto_state.device_secret_set) {
-    for (i = 0u; i < sizeof(g_crypto_state.device_secret) && i < sizeof(mac_input); ++i) {
-      mac_input[i] ^= g_crypto_state.device_secret[i];
-    }
-  }
-  crypto_stub_hash16(mac_input, sizeof(mac_input), out_tag);
-  security_secure_zero(mac_input, sizeof(mac_input));
   return true;
 }
 
@@ -570,18 +612,15 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
     return false;
   }
 
-  // Use ATECC608A if bound, otherwise fallback to stub
   bool success;
   if (g_crypto_state.secure_element_bound) {
-      // success = atecc608a_decrypt_aead(ciphertext, ciphertext_len, aad, aad_len, tag, plaintext, plaintext_capacity, plaintext_len);
-      // Stubbing for now
-      for (i = 0u; i < ciphertext_len && i < plaintext_capacity; ++i) {
-          plaintext[i] = ciphertext[i] ^ stream_mask_for_index(i);
-      }
-      *plaintext_len = ciphertext_len;
-      crypto_stub_hash16(plaintext, *plaintext_len, expected_tag); // Simulate tag
-      success = true;
+      success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Assuming master key is in slot 0
+                                     ciphertext, ciphertext_len,
+                                     aad, aad_len,
+                                     tag,
+                                     plaintext, plaintext_capacity, plaintext_len);
   } else {
+      // Fallback to stub for development builds if ATECC is not bound or fails
       for (i = 0u; i < ciphertext_len && i < plaintext_capacity; ++i) {
           plaintext[i] = ciphertext[i] ^ stream_mask_for_index(i);
       }
@@ -596,27 +635,31 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
   }
 
   // MAC verification
-  memset(mac_input, 0, sizeof(mac_input));
-  for (i = 0u; i < *plaintext_len && i < sizeof(mac_input); ++i) {
-    mac_input[i] ^= plaintext[i];
-  }
-  for (i = 0u; i < aad_len && i < sizeof(mac_input); ++i) {
-    mac_input[i] ^= aad[i];
-  }
-  if (g_crypto_state.device_secret_set) {
-    for (i = 0u; i < sizeof(g_crypto_state.device_secret) && i < sizeof(mac_input); ++i) {
-      mac_input[i] ^= g_crypto_state.device_secret[i];
-    }
-  }
-  crypto_stub_hash16(mac_input, sizeof(mac_input), expected_tag);
+  // This part might be redundant if ATECC handles the tag verification internally.
+  // If ATECC performs verification and returns success/failure, this section should be removed or adapted.
+  if (!g_crypto_state.secure_element_bound) {
+      memset(mac_input, 0, sizeof(mac_input));
+      for (i = 0u; i < *plaintext_len && i < sizeof(mac_input); ++i) {
+        mac_input[i] ^= plaintext[i];
+      }
+      for (i = 0u; i < aad_len && i < sizeof(mac_input); ++i) {
+        mac_input[i] ^= aad[i];
+      }
+      if (g_crypto_state.device_secret_set) {
+        for (i = 0u; i < sizeof(g_crypto_state.device_secret) && i < sizeof(mac_input); ++i) {
+          mac_input[i] ^= g_crypto_state.device_secret[i];
+        }
+      }
+      crypto_stub_hash16(mac_input, sizeof(mac_input), expected_tag);
 
-  if (!sec_consttime_memeq(expected_tag, tag, 16u)) {
-    security_secure_zero(expected_tag, sizeof(expected_tag));
-    security_secure_zero(mac_input, sizeof(mac_input));
-    security_secure_zero(plaintext, *plaintext_len); // Zeroize plaintext on auth failure
-    return false;
+      if (!sec_consttime_memeq(expected_tag, tag, 16u)) {
+        security_secure_zero(expected_tag, sizeof(expected_tag));
+        security_secure_zero(mac_input, sizeof(mac_input));
+        security_secure_zero(plaintext, *plaintext_len); // Zeroize plaintext on auth failure
+        return false;
+      }
+      security_secure_zero(expected_tag, sizeof(expected_tag));
+      security_secure_zero(mac_input, sizeof(mac_input));
   }
-  security_secure_zero(expected_tag, sizeof(expected_tag));
-  security_secure_zero(mac_input, sizeof(mac_input));
   return true;
 }

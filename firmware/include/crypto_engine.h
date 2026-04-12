@@ -5,6 +5,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Forward declarations for hardware driver enums/structs if needed
+typedef enum {
+    ATECC608A_SUCCESS = 0,
+    ATECC608A_ERROR = -1,
+    // Add other specific error codes as needed
+} atecc608a_status_t;
+
+typedef enum {
+    ATECC608A_AEAD_INTERFACE,
+    ATECC608A_KDF_INTERFACE,
+    // Add other interface types
+} atecc608a_interface_t;
+
 typedef enum {
   CRYPTO_BACKEND_SOFTWARE_FALLBACK = 0,
   CRYPTO_BACKEND_ATECC608A
@@ -38,7 +51,7 @@ void crypto_engine_password_fingerprint(const char *password,
                                         size_t out_len);
 void crypto_engine_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]);
 
-/* Future-ready primitives for AEAD and KDF integration. */
+/* Primitives for AEAD and KDF integration using ATECC608A. */
 bool crypto_engine_derive_pin_key(const char *pin,
                                   const uint8_t *salt,
                                   size_t salt_len,
@@ -59,5 +72,18 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
                                 uint8_t *plaintext,
                                 size_t plaintext_capacity,
                                 size_t *plaintext_len);
+
+/* Secure Boot related crypto functions */
+bool crypto_engine_ecdsa_verify(const uint8_t *public_key,
+                                size_t public_key_len,
+                                const uint8_t *message_hash,
+                                size_t message_hash_len,
+                                const uint8_t *signature,
+                                size_t signature_len);
+
+/* ATECC608A specific read/write slot functions */
+bool crypto_engine_read_atecc_slot(uint8_t slot_id, uint8_t *data, size_t data_len);
+bool crypto_engine_write_atecc_slot(uint8_t slot_id, const uint8_t *data, size_t data_len);
+
 
 #endif /* CRYPTO_ENGINE_H */
