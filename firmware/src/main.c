@@ -15,20 +15,30 @@
 #include "ui_feedback.h"
 #include "usb_session.h"
 
-// MX_USB_PCD_Init declaration is now unnecessary as pcd_hal_init encapsulates it.
-
 // Global variables for device state and settings
 static device_context_t g_device_ctx;
 static runtime_settings_t g_runtime_settings;
 static totp_store_t g_totp_store;
 
+// A simple in-memory representation of credentials for demonstration.
+// In a real application, these would be loaded from secure storage.
+#define MAX_IN_MEMORY_CREDENTIALS 5
+static credential_record_t g_credentials[MAX_IN_MEMORY_CREDENTIALS] = {0};
+static size_t g_credential_count = 0; // The number of actual credentials stored
+
 // Placeholder for a function to get the pending credential and origin for typing
 // This needs to be implemented based on how the state machine manages pending actions.
 bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t *out_credential, char *out_origin, size_t origin_len) {
-    // This is a placeholder. In a real implementation, this function would retrieve
-    // the credential and origin that the state machine is waiting to type.
-    // For now, we'll return false to indicate no pending action.
-    (void)ctx; (void)out_credential; (void)out_origin; (void)origin_len;
+    if (ctx->state == DEVICE_CONFIRM_TYPE && ctx->selected_credential_idx < g_credential_count) {
+        if (out_credential != NULL) {
+            *out_credential = g_credentials[ctx->selected_credential_idx];
+        }
+        if (out_origin != NULL) {
+            strncpy(out_origin, g_credentials[ctx->selected_credential_idx].origin, origin_len - 1);
+            out_origin[origin_len - 1] = '\0';
+        }
+        return true;
+    }
     return false;
 }
 
@@ -180,11 +190,17 @@ int main(void) {
             }
         }
 
-        // Update LED state based on device context
-        platform_hal_led_set(PLATFORM_HAL_LED_LOCKED, g_device_ctx.state == DEVICE_LOCKED || g_device_ctx.state == DEVICE_LOCKED_OUT);
-        platform_hal_led_set(PLATFORM_HAL_LED_ACTIVITY, ui_status.led == UI_LED_TYPING_ACTIVE); // Example for activity LED
+        // Update LED state based on the current LED pattern from ui_status
+        // The ui_feedback_from_state function now determines the pattern,
+        // and a new helper function will apply it.
+        g_device_ctx.current_led_pattern = ui_status.led_pattern;
+        update_led_state(&g_device_ctx, platform_hal_get_systick());
+
 
         // Add a small delay or yield if necessary to prevent busy-waiting
-        // HAL_Delay(1); // Example delay
+        platform_hal_delay_ms(1);
     }
 }
+
+// Implement the specific LED update logic
+extern void update_led_state(device_context_t *ctx, uint32_t current_tick);
