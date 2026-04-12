@@ -15,9 +15,7 @@
 #include "ui_feedback.h"
 #include "usb_session.h"
 
-// Forward declarations for HAL and SystemClock_Config
-extern void SystemClock_Config(void);
-extern void MX_USB_PCD_Init(void); // Use the correct USB initialization function
+// MX_USB_PCD_Init declaration is now unnecessary as pcd_hal_init encapsulates it.
 
 // Global variables for device state and settings
 static device_context_t g_device_ctx;
