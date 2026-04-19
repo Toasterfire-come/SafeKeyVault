@@ -5,14 +5,14 @@ This document outlines key security features identified in `docs/SECURITY_MODEL.
 ## ATECC608A Driver Implementation (High Priority)
 
 1.  **Implement `atecc608a_driver.c` for core ATECC functions:**
-    *   Replace placeholder / stub implementations of `atecc608a_init()`.
-    *   Implement `atecc608a_self_test()` to verify hardware functionality.
-    *   Implement `atecc608a_is_slot_provisioned()` for key status checks.
-    *   Implement `atecc608a_write_slot()` for secure key/data storage.
-    *   Implement `atecc608a_read_slot()` for secure data retrieval.
-    *   Implement `atecc608a_bind_slot()` (if applicable for specific usage).
+    *   ~~Replace placeholder / stub implementations of `atecc608a_init()`.~~ (Done - `firmware/src/atecc608a_driver.c`)
+    *   ~~Implement `atecc608a_self_test()` to verify hardware functionality.~~ (Done - `firmware/src/atecc608a_driver.c`)
+    *   ~~Implement `atecc608a_is_slot_provisioned()` for key status checks.~~ (Done - `firmware/src/atecc608a_driver.c`)
+    *   ~~Implement `atecc608a_write_slot()` for secure key/data storage.~~ (Done - `firmware/src/atecc608a_driver.c`)
+    *   ~~Implement `atecc608a_read_slot()` for secure data retrieval.~~ (Done - `firmware/src/atecc608a_driver.c`)
+    *   ~~Implement `atecc608a_bind_slot()` (if applicable for specific usage).~~ (Done - `firmware/src/atecc608a_driver.c`)
 
-2.  **Implement ATECC608A cryptographic primitives:**
+2.  **Implement ATECC608A cryptographic primitives:** *(Next Phase)*
     *   Replace placeholder `atecc608a_sha256()` with the hardware-accelerated SHA256.
     *   Implement `atecc608a_encrypt_aead()` for hardware-backed authenticated encryption.
     *   Implement `atecc608a_decrypt_aead()` for hardware-backed authenticated decryption.
@@ -21,7 +21,7 @@ This document outlines key security features identified in `docs/SECURITY_MODEL.
     *   Implement `atecc608a_ecdsa_sign()` for hardware-backed ECDSA signing.
     *   Implement `atecc608a_ecdsa_verify()` for hardware-backed ECDSA verification.
 
-3.  **Refine `crypto_engine` production checks:**
+3.  **Refine `crypto_engine` production checks:** *(Later Phase)*
     *   Review all `Error_Handler()` calls under `FIRMWARE_PRODUCTION` to ensure they lead to a secure, unrecoverable state (e.g., system reset, lockout, or fault indicator).
     *   Ensure `atecc608a_is_available()` and `atecc608a_is_ready()` (if implemented) correctly query the ATECC state regarding interface readiness.
 
