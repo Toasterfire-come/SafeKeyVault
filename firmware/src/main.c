@@ -147,14 +147,17 @@ int main(void) {
     // --- Secure Boot Verification ---
     // This initial step verifies the authenticity of the loaded firmware manifest
     // using the trusted public key. If verification fails, the device halts.
-    // In a real bootloader, the manifest hash and signature would be read from
-    // a dedicated flash region.
-    if (!secure_boot_verify_manifest(k_firmware_manifest_hash, 
+    // In a real bootloader, the manifest hash, signature, and new firmware version would be read from
+    // a dedicated flash region or from parsed manifest data.
+    // For this placeholder, we use a dummy version (e.g., 1) for the new firmware.
+    if (!secure_boot_verify_manifest(1, // Placeholder for new firmware version
+                                     k_firmware_manifest_hash, 
                                      sizeof(k_firmware_manifest_hash),
                                      k_firmware_signature, 
                                      sizeof(k_firmware_signature),
                                      k_trusted_firmware_public_key, 
-                                     sizeof(k_trusted_firmware_public_key))) {
+                                     sizeof(k_trusted_firmware_public_key),
+                                     NULL)) { // Pass NULL for out_result for now, or define a local result var.
         Error_Handler(); // Firmware verification failed, halt device.
     }
     // --- End Secure Boot Verification ---
