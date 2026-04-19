@@ -67,6 +67,9 @@ void SystemClock_Config(void) {
     // System clock configuration is board-specific, stub here.
 }
 
+// Error_Handler is defined as a global function, typically in main.c,
+// to handle fatal, unrecoverable errors. It should halt execution or
+// put the device into a safe, error-indicating state.
 void Error_Handler(void) {
     // In production, this should indicate a fatal, unrecoverable error
     // e.g., by halting the system, or blinking an error LED pattern.

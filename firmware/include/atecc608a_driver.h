@@ -115,6 +115,67 @@ bool atecc608a_ecdsa_sign(uint8_t key_slot, const uint8_t *digest, uint8_t *sign
 // digest: The 32-byte hash (digest) that was signed.
 // signature: The 64-byte ECDSA signature to verify.
 // Returns true if the signature is valid, false otherwise.
+// Perform hardware-backed ECDSA signature verification.
+// public_key: The 64-byte uncompressed public key (X and Y coordinates).
+// digest: The 32-byte hash (digest) that was signed.
+// signature: The 64-byte ECDSA signature to verify.
+// Returns true if the signature is valid, false otherwise.
+// Note: `public_key_len`, `digest_len`, `signature_len` are omitted assuming P-256 (64-byte pubkey, 32-byte digest, 64-byte sig).
 bool atecc608a_ecdsa_verify(const uint8_t *public_key, const uint8_t *digest, const uint8_t *signature);
+
+// Check if the ATECC608A is generally available (initialized and self-test passed).
+// Returns true if available, false otherwise.
+bool atecc608a_is_available(void);
+
+// Enum for specific cryptographic functions the crypto_engine might query from ATECC.
+typedef enum {
+    CRYPTO_FUNCTION_ANY = 0,             // General availability or any function
+    CRYPTO_FUNCTION_AEAD,                // Authenticated Encryption with Associated Data
+    CRYPTO_FUNCTION_KDF,                 // Key Derivation Function
+    CRYPTO_FUNCTION_ECDSA_SIGN,          // ECDSA Signing
+    CRYPTO_FUNCTION_ECDSA_VERIFY,        // ECDSA Verification
+    CRYPTO_FUNCTION_ECC_GENERATE         // ECC Key Pair Generation
+} CryptoFunctionType;
+
+// Check if the ATECC608A is ready for a specific cryptographic function.
+// This allows checking for availability of specific features/slots.
+// func_type: The type of cryptographic function to check readiness for.
+// Returns true if ready, false otherwise.
+bool atecc608a_is_ready(CryptoFunctionType func_type);
+
+// This function directly outputs derived key material.
+// In a real ATECC, derived keys are often placed in other slots or require specific commands to read.
+// This adjusts the mock implementation to match the crypto_engine's expectation for fingerprinting and KDFs that output direct material.
+// parent_key_slot: The ATECC slot containing the parent key for derivation.
+// data: Input data for KDF (e.g., salt, context).
+// data_len: Length of input data.
+// out_key: Output buffer for the derived key material.
+// out_key_len: Expected length of the derived key. Must be <= 32 bytes for current simulation.
+// Returns true on success, false otherwise.
+bool atecc608a_derive_key_slot_and_output(uint8_t parent_key_slot,
+                                          const uint8_t *data, size_t data_len,
+                                          uint8_t *out_key, size_t out_key_len);
+
+// Updated AEAD encryption signature to include capacity and return length for more flexible use.
+bool atecc608a_encrypt_aead(uint8_t key_slot,
+                            const uint8_t *plaintext, size_t plaintext_len,
+                            const uint8_t *aad, size_t aad_len,
+                            const uint8_t *nonce, size_t nonce_len,         // Nonce can be NULL if managed internally
+                            uint8_t *ciphertext, size_t ciphertext_capacity, // Capacity of ciphertext buffer
+                            size_t *ciphertext_len,                          // Actual length of ciphertext written
+                            uint8_t *tag);                                   // 16-byte authentication tag
+
+// Updated AEAD decryption signature to include capacity and return length.
+bool atecc608a_decrypt_aead(uint8_t key_slot,
+                            const uint8_t *ciphertext, size_t ciphertext_len,
+                            const uint8_t *aad, size_t aad_len,
+                            const uint8_t *nonce, size_t nonce_len,         // Nonce can be NULL if managed internally
+                            const uint8_t *tag,
+                            uint8_t *plaintext, size_t plaintext_capacity,   // Capacity of plaintext buffer
+                            size_t *plaintext_len);                          // Actual length of plaintext written
+
+// Simplified signatures for generate_ec_keypair and ecdsa_sign assuming P-256 curve details.
+bool atecc608a_generate_ec_keypair(uint8_t key_slot, uint8_t *public_key); // Public key is 64 bytes
+bool atecc608a_ecdsa_sign(uint8_t key_slot, const uint8_t *digest, uint8_t *signature); // Digest is 32 bytes, signature 64 bytes
 
 #endif // ATECC608A_DRIVER_H

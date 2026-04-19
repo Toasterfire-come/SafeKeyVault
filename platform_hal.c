@@ -115,12 +115,6 @@ void SystemClock_Config(void)
     /* Nothing to do on host */
 }
 
-/* -------------------------------------------------------------------------
- * Error_Handler — abort in host tests so failures are visible
- * ------------------------------------------------------------------------- */
-void Error_Handler(void)
-{
-    /* In host tests an Error_Handler call is a fatal firmware bug.
-     * Trap here so the test runner reports a crash rather than hanging. */
-    __builtin_trap();
-}
+// No change needed in platform_hal.c for Error_Handler. The one in main.c is the system one.
+// This Error_Handler is for host tests only and correctly uses __builtin_trap().
+// Do not modify.

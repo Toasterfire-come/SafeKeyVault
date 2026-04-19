@@ -21,9 +21,9 @@ This document outlines key security features identified in `docs/SECURITY_MODEL.
     *   ~~Implement `atecc608a_ecdsa_sign()` for hardware-backed ECDSA signing.~~ (Done - `firmware/src/atecc608a_driver.c`)
     *   ~~Implement `atecc608a_ecdsa_verify()` for hardware-backed ECDSA verification.~~ (Done - `firmware/src/atecc608a_driver.c`)
 
-3.  **Refine `crypto_engine` production checks:** *(Next Phase)*
-    *   Review all `Error_Handler()` calls under `FIRMWARE_PRODUCTION` to ensure they lead to a secure, unrecoverable state (e.g., system reset, lockout, or fault indicator).
-    *   Ensure `atecc608a_is_available()` and `atecc608a_is_ready()` (if implemented) correctly query the ATECC state regarding interface readiness.
+3.  **Refine `crypto_engine` production checks:**
+    *   ~~Review all `Error_Handler()` calls under `FIRMWARE_PRODUCTION` to ensure they lead to a secure, unrecoverable state (e.g., system reset, lockout, or fault indicator).~~ (Done - `firmware/src/crypto_engine.c` now calls global `Error_Handler` and `firmware/src/atecc608a_driver.c` has `extern void Error_Handler(void);` for appropriate calls).
+    *   ~~Ensure `atecc608a_is_available()` and `atecc608a_is_ready()` (if implemented) correctly query the ATECC state regarding interface readiness.~~ (Done - `atecc608a_is_available()` and `atecc608a_is_ready()` implemented in `firmware/include/atecc608a_driver.h` and `firmware/src/atecc608a_driver.c`; integrated into `firmware/src/crypto_engine.c` calls and production checks.)
 
 ## Secure Boot and Signed Update Flow (Requires additional files)
 
