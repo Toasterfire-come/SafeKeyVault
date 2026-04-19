@@ -5,68 +5,118 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// --- IMPORTANT ---
+// This header file defines the interface for the ATECC608A driver.
+// The implementation in `atecc608a_driver.c` currently uses STUBS and SIMULATIONS.
+// In a real implementation, these functions would interface with the ATECC608A hardware
+// via the Microchip CryptoAuthLib and an appropriate HAL (e.g., I2C/SWI drivers).
+// --- IMPORTANT ---
+
+// Define common slot indices for clarity. These are typical for ATECC608A.
+// Actual usage may vary based on device configuration and provisioning.
+#define ATECC608A_SLOT_RESERVED_0           0
+#define ATECC608A_SLOT_RESERVED_1           1
+#define ATECC608A_SLOT_RESERVED_2           2
+#define ATECC608A_SLOT_RESERVED_3           3
+#define ATECC608A_SLOT_DEVICE_SECRET        4  // Often used for device unique secret
+#define ATECC608A_SLOT_SIGNING_PRIVKEY      5  // Private key for signing
+#define ATECC608A_SLOT_ENCRYPTION_PRIVKEY   6  // Private key for encryption
+#define ATECC608A_SLOT_MASTER_KEY           7  // Master key for various operations
+#define ATECC608A_SLOT_PUBLIC_KEY_SIGN      8  // Public key corresponding to SIGNING_PRIVKEY
+#define ATECC608A_SLOT_PUBLIC_KEY_ENCRYPT  9  // Public key corresponding to ENCRYPTION_PRIVKEY
+#define ATECC608A_SLOT_CERT_DEVICE       10  // Device certificate
+#define ATECC608A_SLOT_CERT_CA           11  // CA certificate
+#define ATECC608A_SLOT_PRIVATE_DATA_0    12  // User-defined private data slot
+#define ATECC608A_SLOT_PRIVATE_DATA_1    13  // User-defined private data slot
+#define ATECC608A_SLOT_PRIVATE_DATA_2    14  // User-defined private data slot
+#define ATECC608A_SLOT_PRIVATE_DATA_3    15  // User-defined private data slot
+
+// Enum to categorize cryptographic functions for readiness checks.
 typedef enum {
     CRYPTO_FUNCTION_ANY = 0,
-    CRYPTO_FUNCTION_AEAD,
-    CRYPTO_FUNCTION_KDF,
-    CRYPTO_FUNCTION_ECDSA_SIGN,
-    CRYPTO_FUNCTION_ECDSA_VERIFY,
-    CRYPTO_FUNCTION_ECC_GENERATE,
+    CRYPTO_FUNCTION_AEAD,             // Authenticated Encryption with Associated Data
+    CRYPTO_FUNCTION_KDF,              // Key Derivation Function
+    CRYPTO_FUNCTION_ECDSA_SIGN,       // ECDSA Signing
+    CRYPTO_FUNCTION_ECDSA_VERIFY,     // ECDSA Verification
+    CRYPTO_FUNCTION_ECC_GENERATE,     // ECC Key Pair Generation
     CRYPTO_FUNCTION_MAX
 } CryptoFunctionType;
 
-// Initialize the ATECC608A driver. This should be called once at startup.
-// Returns true on success, false otherwise.
+/**
+ * @brief Initializes the ATECC608A device driver.
+ * This function should be called once during system startup.
+ * @retval true if initialization is successful, false otherwise.
+ */
 bool atecc608a_init(void);
 
-// Perform a self-test of the ATECC608A.
-// Returns true if the self-test passes, false otherwise.
+/**
+ * @brief Performs a self-test on the ATECC608A device.
+ * This verifies the basic functionality and integrity of the chip.
+ * @retval true if the self-test passes, false otherwise.
+ */
 bool atecc608a_self_test(void);
 
-// Check if a specific slot in the ATECC608A is provisioned (i.e., contains data or a key).
-// slot_idx: The index of the slot to check (0-15).
-// Returns true if the slot is provisioned, false otherwise or on error.
+/**
+ * @brief Checks if a specific slot on the ATECC608A is provisioned.
+ * Provisioned slots typically contain data, keys, or certificates and may be locked.
+ * @param slot_idx The index of the slot to check (0-15).
+ * @retval true if the slot is provisioned, false otherwise or on error.
+ */
 bool atecc608a_is_slot_provisioned(uint8_t slot_idx);
 
-// Write data to a specific slot in the ATECC608A.
-// slot_idx: The index of the slot to write (0-15).
-// data: The data to write.
-// len: Length of data (<=32 bytes typically).
-// Returns true on success, false otherwise.
+/**
+ * @brief Writes data to a specific slot on the ATECC608A.
+ * Note: The actual ATECC608A has specific zones and write permissions.
+ * This function abstracts those details.
+ * @param slot_idx The index of the slot to write to (0-15).
+ * @param data Pointer to the data to write.
+ * @param len Length of the data to write (typically up to 32 bytes for data slots).
+ * @retval true if the write is successful, false otherwise.
+ */
 bool atecc608a_write_slot(uint8_t slot_idx, const uint8_t *data, size_t len);
 
-// Read data from a specific slot in the ATECC608A.
-// slot_idx: The index of the slot to read (0-15).
-// data: Buffer to receive the data.
-// len: Expected length of data (must match slot contents).
-// Returns true on success, false otherwise.
+/**
+ * @brief Reads data from a specific slot on the ATECC608A.
+ * @param slot_idx The index of the slot to read from (0-15).
+ * @param data Pointer to the buffer to store the read data.
+ * @param len Expected length of the data to read.
+ * @retval true if the read is successful, false otherwise.
+ */
 bool atecc608a_read_slot(uint8_t slot_idx, uint8_t *data, size_t len);
 
-// Bind/lock a specific slot in the ATECC608A (finalizes configuration).
-// slot_idx: The index of the slot to bind (0-15).
-// Returns true on success, false otherwise.
+/**
+ * @brief Binds or locks a slot on the ATECC608A.
+ * This operation typically makes the slot's contents immutable or finalizes its configuration.
+ * @param slot_idx The index of the slot to bind (0-15).
+ * @retval true if the bind operation is successful, false otherwise.
+ */
 bool atecc608a_bind_slot(uint8_t slot_idx);
 
-// Compute SHA256 hash using ATECC608A hardware.
-// data: Input data.
-// len: Length of input data.
-// digest: 32-byte output buffer for SHA256 digest.
-// Returns true on success, false otherwise.
+/**
+ * @brief Computes the SHA256 hash of input data using the ATECC608A hardware.
+ * @param data Pointer to the input data.
+ * @param len Length of the input data.
+ * @param digest Pointer to the buffer where the 32-byte digest will be stored.
+ * @retval true if the hash computation is successful, false otherwise.
+ */
 bool atecc608a_sha256(const uint8_t *data, size_t len, uint8_t *digest);
 
-// AEAD Encryption (e.g., AES-GCM) using ATECC608A.
-// key_slot: Slot containing the key (0-15).
-// plaintext: Input plaintext.
-// plaintext_len: Length of plaintext.
-// aad: Additional authenticated data.
-// aad_len: Length of AAD.
-// nonce: Nonce/IV (may be NULL if handled internally).
-// nonce_len: Length of nonce.
-// ciphertext: Output buffer.
-// ciphertext_capacity: Capacity of ciphertext buffer.
-// ciphertext_len: Output length (set on success).
-// tag: Authentication tag output (typically 16 bytes).
-// Returns true on success, false otherwise.
+/**
+ * @brief Performs AEAD (Authenticated Encryption with Associated Data) encryption.
+ * This function is a placeholder for operations like AES-GCM.
+ * @param key_slot The slot index containing the encryption key.
+ * @param plaintext Pointer to the data to encrypt.
+ * @param plaintext_len Length of the plaintext.
+ * @param aad Pointer to the associated data.
+ * @param aad_len Length of the associated data.
+ * @param nonce Pointer to the nonce (Initialization Vector).
+ * @param nonce_len Length of the nonce.
+ * @param ciphertext Pointer to the buffer for the encrypted data.
+ * @param ciphertext_capacity Maximum capacity of the ciphertext buffer.
+ * @param ciphertext_len Pointer to store the actual length of the ciphertext.
+ * @param tag Pointer to the buffer for the authentication tag.
+ * @retval true if encryption is successful, false otherwise.
+ */
 bool atecc608a_encrypt_aead(uint8_t key_slot,
                             const uint8_t *plaintext, size_t plaintext_len,
                             const uint8_t *aad, size_t aad_len,
@@ -75,19 +125,22 @@ bool atecc608a_encrypt_aead(uint8_t key_slot,
                             size_t *ciphertext_len,
                             uint8_t *tag);
 
-// AEAD Decryption (e.g., AES-GCM) using ATECC608A.
-// key_slot: Slot containing the key (0-15).
-// ciphertext: Input ciphertext.
-// ciphertext_len: Length of ciphertext.
-// aad: Additional authenticated data.
-// aad_len: Length of AAD.
-// nonce: Nonce/IV (may be NULL if handled internally).
-// nonce_len: Length of nonce.
-// tag: Authentication tag input.
-// plaintext: Output buffer.
-// plaintext_capacity: Capacity of plaintext buffer.
-// plaintext_len: Output length (set on success).
-// Returns true on success (tag verified), false otherwise (incl. tag mismatch).
+/**
+ * @brief Performs AEAD (Authenticated Encryption with Associated Data) decryption.
+ * This function is a placeholder for operations like AES-GCM. It includes tag verification.
+ * @param key_slot The slot index containing the decryption key.
+ * @param ciphertext Pointer to the encrypted data.
+ * @param ciphertext_len Length of the ciphertext.
+ * @param aad Pointer to the associated data.
+ * @param aad_len Length of the associated data.
+ * @param nonce Pointer to the nonce (Initialization Vector).
+ * @param nonce_len Length of the nonce.
+ * @param tag Pointer to the authentication tag.
+ * @param plaintext Pointer to the buffer for the decrypted data.
+ * @param plaintext_capacity Maximum capacity of the plaintext buffer.
+ * @param plaintext_len Pointer to store the actual length of the plaintext.
+ * @retval true if decryption and verification are successful, false otherwise (including tag mismatch).
+ */
 bool atecc608a_decrypt_aead(uint8_t key_slot,
                             const uint8_t *ciphertext, size_t ciphertext_len,
                             const uint8_t *aad, size_t aad_len,
@@ -96,53 +149,73 @@ bool atecc608a_decrypt_aead(uint8_t key_slot,
                             uint8_t *plaintext, size_t plaintext_capacity,
                             size_t *plaintext_len);
 
-// Derive key material from parent key slot and output to buffer.
-// parent_key_slot: Slot containing parent key.
-// data: Input data for derivation.
-// data_len: Length of input data.
-// out_key: Output buffer for derived key.
-// out_key_len: Length of output key material.
-// Returns true on success, false otherwise.
+/**
+ * @brief Derives key material from a parent key and additional data, outputting to a buffer.
+ * This function is a placeholder for Key Derivation Functions (KDFs).
+ * @param parent_key_slot The slot index of the parent key.
+ * @param data Pointer to additional data for derivation.
+ * @param data_len Length of the additional data.
+ * @param out_key Pointer to the buffer for the derived key material.
+ * @param out_key_len Length of the derived key material to generate.
+ * @retval true if key derivation is successful, false otherwise.
+ */
 bool atecc608a_derive_key_slot_and_output(uint8_t parent_key_slot,
                                           const uint8_t *data, size_t data_len,
                                           uint8_t *out_key, size_t out_key_len);
 
-// Derive key from parent key slot and write to derived slot.
-// parent_key_slot: Slot containing parent key.
-// data: Input data for derivation.
-// data_len: Length of input data.
-// derived_key_slot: Target slot for derived key.
-// Returns true on success, false otherwise.
+/**
+ * @brief Derives key material from a parent key and additional data, storing it in a target slot.
+ * @param parent_key_slot The slot index of the parent key.
+ * @param data Pointer to additional data for derivation.
+ * @param data_len Length of the additional data.
+ * @param derived_key_slot The slot index where the derived key will be stored.
+ * @retval true if key derivation and storage are successful, false otherwise.
+ */
 bool atecc608a_derive_key_slot(uint8_t parent_key_slot,
                                const uint8_t *data, size_t data_len,
                                uint8_t derived_key_slot);
 
-// Generate ECC P-256 keypair in slot, return public key.
-// key_slot: Slot for private key (0-15).
-// public_key: Output buffer (64 bytes uncompressed).
-// Returns true on success, false otherwise.
+/**
+ * @brief Generates an ECC P-256 key pair. The private key is stored in a specified slot,
+ * and the corresponding public key is returned.
+ * @param key_slot The slot index where the private key will be stored (0-15).
+ * @param public_key Pointer to the buffer where the public key will be stored (typically 64 bytes for uncompressed P256).
+ * @retval true if key pair generation is successful, false otherwise.
+ */
 bool atecc608a_generate_ec_keypair(uint8_t key_slot, uint8_t *public_key);
 
-// ECDSA sign using private key in slot.
-// key_slot: Slot containing private key.
-// digest: 32-byte message digest (SHA256).
-// signature: Output buffer (64 bytes R+S).
-// Returns true on success, false otherwise.
+/**
+ * @brief Signs a digest using the private key stored in a specific slot via ECDSA.
+ * @param key_slot The slot index containing the private key.
+ * @param digest Pointer to the 32-byte message digest (e.g., SHA256 output).
+ * @param signature Pointer to the buffer where the signature will be stored (typically 64 bytes for P256).
+ * @retval true if signing is successful, false otherwise.
+ */
 bool atecc608a_ecdsa_sign(uint8_t key_slot, const uint8_t *digest, uint8_t *signature);
 
-// ECDSA verify using external public key.
-// public_key: Uncompressed P-256 public key (64 bytes).
-// digest: 32-byte message digest.
-// signature: 64-byte signature (R+S).
-// Returns true if valid, false otherwise.
+/**
+ * @brief Verifies an ECDSA signature against a public key and digest.
+ * This function can be used with externally provided public keys.
+ * @param public_key Pointer to the public key (e.g., 64 bytes uncompressed P256).
+ * @param digest Pointer to the 32-byte message digest.
+ * @param signature Pointer to the signature to verify.
+ * @retval true if the signature is valid, false otherwise.
+ */
 bool atecc608a_ecdsa_verify(const uint8_t *public_key, const uint8_t *digest, const uint8_t *signature);
 
-// Check if ATECC608A is available (init + selftest passed).
+/**
+ * @brief Checks if the ATECC608A device is available and operational.
+ * Availability is typically determined by successful initialization and self-test.
+ * @retval true if the device is available, false otherwise.
+ */
 bool atecc608a_is_available(void);
 
-// Check if ATECC608A is ready for specific crypto function.
-// func_type: Type of function to check.
-// Returns true if ready, false otherwise.
+/**
+ * @brief Checks if the ATECC608A is ready to perform a specific cryptographic function.
+ * Readiness may depend on the device's state, configuration, and presence of necessary keys/data.
+ * @param func_type The type of cryptographic function to check readiness for.
+ * @retval true if the device is ready for the specified function, false otherwise.
+ */
 bool atecc608a_is_ready(CryptoFunctionType func_type);
 
 #endif /* ATECC608A_DRIVER_H */
