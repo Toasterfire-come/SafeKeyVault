@@ -90,3 +90,95 @@ bool atecc608a_bind_slot(uint8_t slot_idx) {
   // like `atcab_lock_data_slot` or similar configuration operations.
   return true; // Assume success for now
 }
+
+bool atecc608a_sha256(const uint8_t *data, size_t len, uint8_t *digest) {
+  if (!g_device_initialized || data == NULL || digest == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC library SHA command (e.g., atcab_sha).
+  // For simulation, we'll just fill the digest with a dummy value.
+  memset(digest, 0xAA, 32); // Placeholder SHA256 digest
+  // A real implementation would compute the actual SHA256.
+  return true;
+}
+
+bool atecc608a_encrypt_aead(uint8_t key_slot,
+                            const uint8_t *plaintext, size_t plaintext_len,
+                            const uint8_t *aad, size_t aad_len,
+                            const uint8_t *nonce, size_t nonce_len,
+                            uint8_t *ciphertext, uint8_t *tag) {
+  if (!g_device_initialized || key_slot >= 16 || plaintext == NULL || ciphertext == NULL || tag == NULL || nonce == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC AES commands.
+  // This is a complex operation requiring specific key types and modes (e.g., GCM, CCM).
+  // For simulation, just copy plaintext to ciphertext and fill tag with dummy values.
+  if (plaintext_len > 0) {
+    memcpy(ciphertext, plaintext, plaintext_len);
+  }
+  memset(tag, 0xBB, 16); // Placeholder 16-byte tag
+  return true;
+}
+
+bool atecc608a_decrypt_aead(uint8_t key_slot,
+                            const uint8_t *ciphertext, size_t ciphertext_len,
+                            const uint8_t *aad, size_t aad_len,
+                            const uint8_t *nonce, size_t nonce_len,
+                            const uint8_t *tag,
+                            uint8_t *plaintext) {
+  if (!g_device_initialized || key_slot >= 16 || ciphertext == NULL || plaintext == NULL || tag == NULL || nonce == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC AES commands with tag verification.
+  // For simulation, just copy ciphertext to plaintext and assume tag is valid.
+  if (ciphertext_len > 0) {
+    memcpy(plaintext, ciphertext, ciphertext_len);
+  }
+  return true;
+}
+
+bool atecc608a_derive_key_slot(uint8_t parent_key_slot,
+                               const uint8_t *data, size_t data_len,
+                               uint8_t derived_key_slot) {
+  if (!g_device_initialized || parent_key_slot >= 16 || derived_key_slot >= 16) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC KDF commands (e.g., GenKey with KDF option).
+  // For simulation, just mark the derived slot as provisioned.
+  if (parent_key_slot == derived_key_slot) { // Cannot derive key into the same slot
+      return false;
+  }
+  g_slot_provisioned_status[derived_key_slot] = true;
+  return true;
+}
+
+bool atecc608a_generate_ec_keypair(uint8_t key_slot, uint8_t *public_key) {
+  if (!g_device_initialized || key_slot >= 16 || public_key == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC GenKey command for ECC.
+  // For simulation, fill public_key with dummy values and mark slot as provisioned.
+  memset(public_key, 0xCC, 64); // Placeholder 64-byte public key
+  g_slot_provisioned_status[key_slot] = true;
+  return true;
+}
+
+bool atecc608a_ecdsa_sign(uint8_t key_slot, const uint8_t *digest, uint8_t *signature) {
+  if (!g_device_initialized || key_slot >= 16 || digest == NULL || signature == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC Sign command.
+  // For simulation, fill signature with dummy values.
+  memset(signature, 0xDD, 64); // Placeholder 64-byte signature
+  return true;
+}
+
+bool atecc608a_ecdsa_verify(const uint8_t *public_key, const uint8_t *digest, const uint8_t *signature) {
+  if (!g_device_initialized || public_key == NULL || digest == NULL || signature == NULL) {
+    return false;
+  }
+  // In a real scenario, this would involve ATECC Verify command.
+  // For simulation, always return true.
+  return true;
+}
+}
