@@ -59,7 +59,7 @@ static bool read_flash_sector(uint32_t address, uint8_t *buffer, size_t size) {
 
 static bool write_flash_sector(uint32_t address, const uint8_t *data, size_t size) {
     HAL_StatusTypeDef status;
-    uint32_t sector_error;
+    uint32_t sector_error; // Unused variable, but kept for HAL function signature compatibility if needed.
 
     // Basic address validation. Ensure the address is within the flash memory range.
     if (address < FLASH_BASE || address >= (FLASH_BASE + FLASH_BANK_SIZE)) {
@@ -181,12 +181,12 @@ void storage_backend_init(void) {
     bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
     bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
-    // Initialize debug state based on read results and validity checks.
-    storage_backend_debug_t debug_state;
-    debug_state.slot_a_valid = slot_a_read_ok && is_slot_valid(&slot_a);
-    debug_state.slot_b_valid = slot_b_read_ok && is_slot_valid(&slot_b);
-    debug_state.slot_a_generation = debug_state.slot_a_valid ? slot_a.header.generation : 0;
-    debug_state.slot_b_generation = debug_state.slot_b_valid ? slot_b.header.generation : 0;
+    // The debug_state variable was declared but not used within this function. Removed for cleanliness.
+    // storage_backend_debug_t debug_state;
+    // debug_state.slot_a_valid = slot_a_read_ok && is_slot_valid(&slot_a);
+    // debug_state.slot_b_valid = slot_b_read_ok && is_slot_valid(&slot_b);
+    // debug_state.slot_a_generation = debug_state.slot_a_valid ? slot_a.header.generation : 0;
+    // debug_state.slot_b_generation = debug_state.slot_b_valid ? slot_b.header.generation : 0;
 
     // If neither slot is valid, the storage is considered empty.
     // Subsequent writes will initialize the storage.
@@ -296,6 +296,17 @@ bool storage_backend_read_latest(uint8_t *out_payload,
     *out_len = latest_slot->header.payload_len;
     *out_schema_version = latest_slot->header.schema_version;
 
+    // IMPORTANT: If 'out_payload' contains sensitive data, the caller is responsible
+    // for securely zeroing it out after it's no longer needed.
+    // Example:
+    // uint8_t sensitive_data[STORAGE_BACKEND_MAX_PAYLOAD];
+    // size_t len;
+    // uint32_t schema;
+    // if (storage_backend_read_latest(sensitive_data, sizeof(sensitive_data), &len, &schema)) {
+    //     // ... use sensitive_data ...
+    //     security_secure_zero(sensitive_data, sizeof(sensitive_data)); // Zero out after use
+    // }
+
     return true;
 }
 
@@ -364,7 +375,7 @@ bool storage_backend_wipe(void) {
     }
 
     HAL_StatusTypeDef status;
-    uint32_t sector_error;
+    // uint32_t sector_error; // Removed unused variable
 
     // Unlock flash
     status = HAL_FLASH_Unlock();
@@ -389,7 +400,7 @@ bool storage_backend_wipe(void) {
     erase_init_a.NbSectors = 1;
     // erase_init_a.Banks = FLASH_BANK_1; // Specify bank if using dual-bank configuration
 
-    status = HAL_FLASHEx_Erase(&erase_init_a, &sector_error);
+    status = HAL_FLASHEx_Erase(&erase_init_a, NULL); // Pass NULL for sector_error as it's unused
     if (status != HAL_OK) {
         HAL_FLASH_Lock();
         return false;
@@ -412,7 +423,7 @@ bool storage_backend_wipe(void) {
     erase_init_b.NbSectors = 1;
     // erase_init_b.Banks = FLASH_BANK_1; // Specify bank if using dual-bank configuration
 
-    status = HAL_FLASHEx_Erase(&erase_init_b, &sector_error);
+    status = HAL_FLASHEx_Erase(&erase_init_b, NULL); // Pass NULL for sector_error as it's unused
     if (status != HAL_OK) {
         HAL_FLASH_Lock();
         return false;
