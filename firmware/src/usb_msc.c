@@ -53,7 +53,8 @@ static uint32_t g_tag = 0;
 
 // Master Boot Record (MBR) for FAT12
 // This is a simplified MBR for a single partition.
-static const uint8_t mbr_sector[] = {
+// Removed 'static' to potentially allow wider scope if needed for a full FAT12 implementation.
+uint8_t mbr_sector[] = {
     // Boot sector code (jmp instruction + bootloader stub)
     0xEB, 0x3C, 0x90, // JMP SHORT 0x3c; NOP
     0x4D, 0x53, 0x44, 0x4F, 0x53, 0x35, 0x2E, 0x30, 0x00, // "MSDOS5.0" boot message
