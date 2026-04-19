@@ -22,6 +22,12 @@ static runtime_settings_t g_settings = {
     .autolock_seconds = AUTO_LOCK_TIMEOUT_SECONDS_DEFAULT,
     .pin_attempt_limit = 5, // Default value, will be overridden by loaded settings
     .wipe_on_lockout = false, // Default value
+    // Initialize other settings to safe defaults
+    .passkeys_enabled = false,
+    .totp_enabled = false,
+    .default_account_index = 0,
+    .auto_type_on_plugin = false,
+    .totp_display_mode = 0,
 };
 static uint8_t g_pin_verifier[16];
 static bool g_pin_verifier_set = false;
@@ -135,7 +141,8 @@ bool state_machine_try_unlock(device_context_t *ctx, const char *pin) {
     // Ensure g_pin_verifier_set check is first
     if (!g_pin_verifier_set) {
 #if FIRMWARE_PRODUCTION
-        Error_Handler(); // In production, PIN verifier MUST be set.
+        // In production, the PIN verifier MUST be set. If it's not, it indicates a critical configuration error.
+        Error_Handler();
 #endif
         security_secure_zero(candidate, sizeof(candidate)); // Zeroize buffer
         return false;
@@ -222,6 +229,10 @@ bool state_machine_set_pin(device_context_t *ctx, const char *old_pin, const cha
 
     // PIN verifier must be set. If not, we cannot proceed.
     if (!g_pin_verifier_set) {
+#if FIRMWARE_PRODUCTION
+        // In production, the PIN verifier MUST be set. If it's not, it indicates a critical configuration error.
+        Error_Handler();
+#endif
         security_secure_zero(old_hash, sizeof(old_hash)); // Zeroize buffer
         security_secure_zero(new_hash, sizeof(new_hash)); // Zeroize buffer
         return false;
@@ -379,6 +390,12 @@ void state_machine_apply_settings(const runtime_settings_t *settings) {
     // Ensure pin_attempt_limit is within a reasonable range if not set by settings
     if (g_settings.pin_attempt_limit == 0) {
         g_settings.pin_attempt_limit = 5; // Default to 5 if 0 is provided
+    }
+    // Ensure pin_attempt_limit is one of the defined constants for production safety
+    if (g_settings.pin_attempt_limit != PIN_ATTEMPT_LIMIT_3 &&
+        g_settings.pin_attempt_limit != PIN_ATTEMPT_LIMIT_5 &&
+        g_settings.pin_attempt_limit != PIN_ATTEMPT_LIMIT_10) {
+        g_settings.pin_attempt_limit = PIN_ATTEMPT_LIMIT_5; // Default to 5 if invalid value
     }
 }
 

@@ -211,7 +211,9 @@ void usb_session_init(void) {
 }
 
 bool usb_session_start(usb_session_challenge_t *out_challenge) {
-  uint8_t seed[16] = {0}; // Initialize seed with zeros. In production, this should be a securely generated random value.
+  // IMPORTANT FOR PRODUCTION: The seed MUST be generated from a cryptographically secure random number generator.
+  // Using zeroed data here is insecure and for demonstration purposes only.
+  uint8_t seed[16] = {0};
   uint8_t hash[16] = {0};
   bool success = false;
 
@@ -221,7 +223,7 @@ bool usb_session_start(usb_session_challenge_t *out_challenge) {
 
   // Securely zeroize global session state before starting a new session
   security_secure_zero(&g_session, sizeof(g_session));
-  g_session.session_id = 1u;
+  g_session.session_id = 1u; // Session ID can be incremented or randomized
   g_expected_client_counter = 1u;
   g_session.authenticated = false;
   g_challenge_len = 16u;

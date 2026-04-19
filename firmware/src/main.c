@@ -158,7 +158,8 @@ int main(void) {
                                      &verification_result)) { // Pass address of local result structure
         // In a real scenario, this would mean the firmware is not trusted.
         // For this commit, we are acknowledging the removal of placeholder data.
-        // Error_Handler(); // Uncomment in a production system with actual secure boot data.
+        // UNCOMMENT IN PRODUCTION: A failed secure boot verification is a critical failure.
+        Error_Handler();
     }
     // --- End Secure Boot Verification ---
 

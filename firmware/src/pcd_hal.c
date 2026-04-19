@@ -38,8 +38,10 @@ static const uint8_t usb_device_descriptor[] = {
     0x00,                      // bDeviceSubClass (defined at interface level)
     0x00,                      // bDeviceProtocol (defined at interface level)
     USB_MAX_EP0_SIZE,          // bMaxPacketSize0
-    0x12, 0x34,                // idVendor
-    0x56, 0x78,                // idProduct
+    // IMPORTANT: Replace with actual Vendor ID and Product ID for production.
+    // These are placeholders and may conflict with other devices.
+    0x12, 0x34,                // idVendor (Placeholder)
+    0x56, 0x78,                // idProduct (Placeholder)
     0x00, 0x01,                // bcdDevice (1.0)
     0x01,                      // iManufacturer
     0x02,                      // iProduct
@@ -171,7 +173,7 @@ static const uint8_t ascii_to_hid_map[128][2] = {
     {0x00, 0x09}, // 0x38 8
     {0x00, 0x0A}, // 0x39 9
     {0x04, 0x36}, // 0x3A : (Shift + ;)
-    {0x04, 0x33}, // 0x3B ;
+    {0x00, 0x33}, // 0x3B ;
     {0x04, 0x30}, // 0x3C < (Shift + ,)
     {0x00, 0x2D}, // 0x3D =
     {0x04, 0x32}, // 0x3E > (Shift + .)
@@ -275,7 +277,8 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd) {
         GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-        GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS; // Check your MCU's alternate function mapping
+        // Check your MCU's alternate function mapping for GPIOA_AF10_OTG_FS
+        GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
         // Enable and set USB interrupt priority
@@ -350,7 +353,9 @@ void HAL_PCD_DisconnectCallback(PCD_HandleTypeDef *hpcd) {
 
 void pcd_hal_init(void) {
     hpcd_USB_OTG_FS.Instance = USB_OTG_FS;
-    hpcd_USB_OTG_FS.Init.dev_endpoints = 6; // Max endpoints for your MCU
+    // Ensure dev_endpoints is correctly set for your specific MCU.
+    // Consult the device datasheet or reference manual.
+    hpcd_USB_OTG_FS.Init.dev_endpoints = 6; // Example value, adjust as needed.
     hpcd_USB_OTG_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
     hpcd_USB_OTG_FS.Init.Sof_enable = true;
     hpcd_USB_OTG_FS.Init.low_power_enable = PCD_LOW_POWER_DISABLE;
@@ -358,13 +363,9 @@ void pcd_hal_init(void) {
     hpcd_USB_OTG_FS.Init.battery_charging_enable = PCD_Battery_Charging_DISABLE;
 
     if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK) {
-        // Handle error
+        // In production, USB initialization failure is critical.
         Error_Handler();
     }
-
-    // Registering endpoint 0x81 as interrupt IN endpoint
-    // This is done within HAL_PCD_ResetCallback after a USB reset.
-    // We just need to ensure the HAL_PCD_Init is called.
 
     // Enable USB global interrupt
     HAL_NVIC_SetPriority(USB_OTG_FS_IRQn, 0, 0); // Adjust priority as needed
@@ -432,10 +433,18 @@ void pcd_hal_register_callback(usb_disconnect_callback_t callback) {
 }
 
 bool pcd_hal_is_connected(void) {
+    // Check if the PCD is in a ready state, indicating a USB connection.
+    // The exact state might vary, but HAL_PCD_STATE_READY is a common indicator.
+    // Ensure this state is correctly managed by the HAL_PCD driver.
     return hpcd_USB_OTG_FS.State == HAL_PCD_STATE_READY;
 }
 
 // Dummy Error_Handler for compilation
 void Error_Handler(void) {
-    while (1) {}
+    // In production, this should indicate a fatal, unrecoverable error
+    // e.g., by halting the system, or blinking an error LED pattern.
+    while (1) {
+        // Consider adding platform-specific error indication here
+        // e.g., blinking an LED, or entering a low-power error state.
+    }
 }
