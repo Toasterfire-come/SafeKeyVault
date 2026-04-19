@@ -157,12 +157,19 @@ int main(void) {
     uint32_t real_firmware_version = 1; // Example: firmware version is 1
     secure_boot_result_t verification_result; // To store detailed results
 
+    // Initialize secure boot policy and state
+    secure_boot_init();
+    // Optionally set a more specific policy if needed, e.g.:
+    // secure_boot_policy_t policy = { .enforce_signature = true, .enforce_antirollback = true, .min_allowed_version = 0 };
+    // secure_boot_set_policy(&policy);
+    // secure_boot_set_current_version(real_firmware_version); // Set the version of the firmware being verified
+
     if (!secure_boot_verify_manifest(real_firmware_version,
-                                     k_firmware_manifest_hash, 
+                                     k_firmware_manifest_hash,
                                      sizeof(k_firmware_manifest_hash),
-                                     k_firmware_signature, 
+                                     k_firmware_signature,
                                      sizeof(k_firmware_signature),
-                                     k_trusted_firmware_public_key, 
+                                     k_trusted_firmware_public_key,
                                      sizeof(k_trusted_firmware_public_key),
                                      &verification_result)) { // Pass address of local result structure
         Error_Handler(); // Firmware verification failed, halt device.
