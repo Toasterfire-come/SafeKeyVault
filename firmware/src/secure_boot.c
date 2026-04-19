@@ -19,64 +19,47 @@
 // Define the size of the version counter stored in the ATECC slot
 #define VERSION_COUNTER_LEN sizeof(uint32_t)
 
-// Define the offset for the firmware signature in the last flash sector.
-// This assumes the signature is located at a specific offset within the last sector.
-// In a real system, this offset would be determined by the linker script or build process.
-#define FIRMWARE_SIGNATURE_OFFSET (FLASH_SECTOR_SIZE - ECDSA_P256_SIGNATURE_LEN)
+// Include necessary headers
+#include "secure_boot.h"
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include "crypto_engine.h"      // For crypto_engine_ecdsa_verify
+#include "security_utils.h"     // For security_secure_zero
+#include "atecc608a_driver.h"   // For ATECC access for anti-rollback
+#include "build_config.h"       // For FIRMWARE_PRODUCTION
+#include "main.h"               // For Error_Handler and other global definitions if needed
+
+// Define the ATECC608A slot for storing the anti-rollback version counter
+#define ATECC608A_SLOT_VERSION_COUNTER 7u
+// Define the size of the version counter stored in the ATECC slot
+#define VERSION_COUNTER_LEN sizeof(uint32_t)
 
 typedef struct {
   bool initialized;
   secure_boot_policy_t policy;
-  uint8_t signing_pubkey[64]; // Public key for signature verification (P-256 public keys are 64 bytes)
-  size_t signing_pubkey_len;
-  bool signing_key_set;
-  uint32_t current_version; // Current firmware version
+  uint32_t current_running_version; // Current RUNNING firmware version for anti-rollback logic
 } secure_boot_state_t;
 
 static secure_boot_state_t g_secure_boot;
-
-// Function to read the firmware signature from the last flash sector
-static bool read_firmware_signature(uint8_t signature[ECDSA_P256_SIGNATURE_LEN]) {
-    uint8_t flash_sector_buffer[FLASH_SECTOR_SIZE]; // Assuming FLASH_SECTOR_SIZE is defined elsewhere
-    size_t bytes_read = 0;
-    bool success = false;
-
-    // Securely zeroize the buffer before use
-    security_secure_zero(flash_sector_buffer, sizeof(flash_sector_buffer));
-
-    // Read the last flash sector
-    if (spi_hal_read_sector(FLASH_LAST_SECTOR_ADDRESS, flash_sector_buffer, sizeof(flash_sector_buffer), &bytes_read) != SPI_HAL_SUCCESS) {
-        return false; // Failed to read flash sector
-    }
-
-    // Extract the signature from the buffer
-    // Check if the read data size is sufficient before copying
-    if (bytes_read < (FIRMWARE_SIGNATURE_OFFSET + ECDSA_P256_SIGNATURE_LEN)) {
-        return false; // Not enough data in the sector for the signature
-    }
-    memcpy(signature, flash_sector_buffer + FIRMWARE_SIGNATURE_OFFSET, ECDSA_P256_SIGNATURE_LEN);
-    success = true;
-
-end:
-    // Securely zeroize the flash sector buffer after use
-    security_secure_zero(flash_sector_buffer, sizeof(flash_sector_buffer));
-    return success;
-}
 
 // Function to read the firmware version from the ATECC608A slot
 static bool read_version_from_atecc(uint32_t *version) {
     uint8_t version_data[VERSION_COUNTER_LEN] = {0}; // Initialize for security
     bool success = false;
 
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback || version == NULL) {
+    // ATECC availability checked by atecc608a_read_slot.
+    // Policy enforcement is handled by the caller.
+    if (version == NULL) {
         goto end;
     }
 
-    if (atecc608a_read_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
+    if (atecc608a_read_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN)) {
         memcpy(version, version_data, VERSION_COUNTER_LEN);
         success = true;
     }
-
 end:
     security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
     return success;
@@ -87,15 +70,13 @@ static bool write_version_to_atecc(uint32_t version) {
     uint8_t version_data[VERSION_COUNTER_LEN] = {0}; // Initialize for security
     bool success = false;
 
-    if (!g_secure_boot.initialized || !g_secure_boot.policy.enforce_antirollback) {
-        goto end;
-    }
-
+    // ATECC availability checked by atecc608a_write_slot.
+    // Policy enforcement is handled by the caller.
+    
     memcpy(version_data, &version, VERSION_COUNTER_LEN);
-    if (atecc608a_write_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN) == ATECC608A_SUCCESS) {
+    if (atecc608a_write_slot(ATECC608A_SLOT_VERSION_COUNTER, version_data, VERSION_COUNTER_LEN)) {
         success = true;
     }
-
 end:
     security_secure_zero(version_data, sizeof(version_data)); // Zeroize sensitive version data
     return success;
@@ -105,37 +86,42 @@ end:
 void secure_boot_init(void) {
   memset(&g_secure_boot, 0, sizeof(g_secure_boot));
   g_secure_boot.initialized = true;
-  // Initialize policy with defaults, can be overridden by secure_boot_set_policy
   g_secure_boot.policy.enforce_signature = true;
   g_secure_boot.policy.enforce_antirollback = true;
   g_secure_boot.policy.min_allowed_version = 0; // No minimum by default
 
-  // Initialize hardware drivers
-  spi_hal_init();
-  atecc608a_init();
+  // Check ATECC availability for anti-rollback. If not available in production, it's critical.
+  if (!atecc608a_is_available()) {
+#if FIRMWARE_PRODUCTION
+      Error_Handler(); // Halt if ATECC is unavailable in production, as anti-rollback may fail.
+#else
+      // In dev, anti-rollback may not be enforced if ATECC is absent.
+      g_secure_boot.policy.enforce_antirollback = false;
+#endif
+  }
 
   // Read the current stored anti-rollback version from ATECC slot 7 immediately upon init.
   // This value determines the minimum allowed version for any new firmware.
   uint32_t stored_version_on_init = 0;
-  if (!read_version_from_atecc(&stored_version_on_init)) {
+  if (g_secure_boot.policy.enforce_antirollback && !read_version_from_atecc(&stored_version_on_init)) {
 #if FIRMWARE_PRODUCTION
       // In production, failure to read the version counter is a critical error.
-      // Halt the device.
+      // Halt the device. (Error_Handler will reset/lock device)
       Error_Handler();
 #else
-      // In development, assume 0 as an initial version if read fails.
+      // In development, assume 0 as an initial version if read fails for an enforced policy.
+      // Or, we might disable anti-rollback during dev if ATECC read fails.
       stored_version_on_init = 0;
 #endif
   }
-  g_secure_boot.current_version = stored_version_on_init;
+  g_secure_boot.current_running_version = stored_version_on_init;
 }
 
 void secure_boot_set_policy(const secure_boot_policy_t *policy) {
   if (!g_secure_boot.initialized) {
-    secure_boot_init(); // Ensure initialization if not already. Handles default policy.
+    secure_boot_init();
   }
   if (policy == NULL) {
-    // Optionally log an error or take default action, but don't crash.
     return;
   }
   g_secure_boot.policy = *policy;
@@ -143,135 +129,107 @@ void secure_boot_set_policy(const secure_boot_policy_t *policy) {
 
 void secure_boot_set_current_version(uint32_t version) {
   if (!g_secure_boot.initialized) {
-    secure_boot_init(); // Ensure initialization if not already.
+    secure_boot_init();
   }
-  g_secure_boot.current_version = version;
+  g_secure_boot.current_running_version = version;
 }
 
-bool secure_boot_set_signing_pubkey(const uint8_t *pubkey, size_t pubkey_len) {
-  if (pubkey == NULL || pubkey_len == 0u || pubkey_len > sizeof(g_secure_boot.signing_pubkey)) {
-    return false;
-  }
-  if (!g_secure_boot.initialized) {
-    secure_boot_init(); // Ensure initialization if not already.
-  }
-  memcpy(g_secure_boot.signing_pubkey, pubkey, pubkey_len);
-  g_secure_boot.signing_pubkey_len = pubkey_len;
-  g_secure_boot.signing_key_set = true;
-  return true;
-}
+// `secure_boot_set_signing_pubkey` is removed as the public key is passed directly to `secure_boot_verify_manifest`.
 
-bool secure_boot_verify_manifest(const secure_boot_manifest_t *manifest,
-                                 const uint8_t *payload_hash,
-                                 size_t payload_hash_len,
+bool secure_boot_verify_manifest(uint32_t new_firmware_version,
+                                 const uint8_t *manifest_hash,
+                                 size_t manifest_hash_len,
+                                 const uint8_t *manifest_signature,
+                                 size_t manifest_signature_len,
+                                 const uint8_t *trusted_public_key,
+                                 size_t trusted_public_key_len,
                                  secure_boot_result_t *out_result) {
-  uint8_t firmware_signature[ECDSA_P256_SIGNATURE_LEN] = {0}; // Initialize for security
-  uint32_t stored_version = 0;
+  uint32_t stored_min_version = 0; // Version from ATECC anti-rollback
   bool signature_ok = false;
   bool rollback_ok = false;
-  bool overall_success = false; // Flag for final return status
+  bool overall_success = false;
 
   if (out_result == NULL) {
     return false;
   }
   memset(out_result, 0, sizeof(*out_result)); // Zeroize result structure
-  if (!g_secure_boot.initialized || manifest == NULL || payload_hash == NULL) {
-    goto end;
+  
+  // Basic parameter validation
+  if (!g_secure_boot.initialized || manifest_hash == NULL || manifest_signature == NULL || trusted_public_key == NULL) {
+    return false;
   }
-  if (payload_hash_len != FIRMWARE_HASH_LEN) {
+  // FIRMWARE_HASH_LEN and ECDSA_P256_SIGNATURE_LEN are defined in secure_boot.h.
+  // The trusted_public_key_len for P256 is 64 bytes.
+  if (manifest_hash_len != FIRMWARE_HASH_LEN || manifest_signature_len != ECDSA_P256_SIGNATURE_LEN || trusted_public_key_len != 64) {
 #if !FIRMWARE_PRODUCTION
-    // Example debug logging:
-    // printf("Secure Boot: Payload hash length mismatch (%zu != %d).\n", payload_hash_len, FIRMWARE_HASH_LEN);
+    // printf("Secure Boot: Input length mismatch.\n");
 #endif
-    goto end; // Hash length mismatch
+    return false;
   }
 
-  // 1. Verify Firmware Signature
-  // 1. Verify Firmware Signature
+  // 1. Verify Firmware Signature using crypto_engine_ecdsa_verify
   if (g_secure_boot.policy.enforce_signature) {
-    if (!g_secure_boot.signing_key_set) {
-      // Signing public key not set, cannot verify signature. This is a critical failure.
-      out_result->signature_valid = false;
-      overall_success = false; // Set overall failure
-      goto end; // Immediately exit as signing key is crucial
+    // Check if ATECC is available and ready for verification first
+    if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_ECDSA_VERIFY)) {
+#if FIRMWARE_PRODUCTION
+        Error_Handler(); // Cannot perform signature verification securely
+#endif
+        return false; // Cannot proceed without secure element capability
     }
-    // Read signature from the last flash sector
-    if (read_firmware_signature(firmware_signature)) {
-      // Verify signature using ECDSA P-256 via crypto engine
-      if (crypto_engine_ecdsa_verify(g_secure_boot.signing_pubkey,
-                                     g_secure_boot.signing_pubkey_len,
-                                     payload_hash,
-                                     payload_hash_len,
-                                     firmware_signature,
-                                     ECDSA_P256_SIGNATURE_LEN)) {
-        signature_ok = true;
-      } else {
-          // Signature verification failed.
-          signature_ok = false;
-      }
+
+    if (crypto_engine_ecdsa_verify(trusted_public_key,
+                                   trusted_public_key_len,
+                                   manifest_hash,
+                                   manifest_hash_len,
+                                   manifest_signature,
+                                   manifest_signature_len)) {
+      signature_ok = true;
     } else {
-        // Failed to read signature from flash.
-        signature_ok = false;
+      signature_ok = false;
     }
-    out_result->signature_valid = signature_ok;
   } else {
-    out_result->signature_valid = true; // Signature enforcement is disabled
+    signature_ok = true; // Signature enforcement is disabled
   }
+  out_result->signature_valid = signature_ok;
+
 
   // 2. Verify Anti-Rollback Counter
   if (g_secure_boot.policy.enforce_antirollback) {
-    // Read the stored version from ATECC608A slot 7
-    if (read_version_from_atecc(&stored_version)) {
-        // Check if the manifest version is strictly greater than the stored version,
-        // or equal if the stored version matches the currently running version (re-flash same version).
-        // A downgrade (manifest lower than stored) is always rejected.
-        if (manifest->version < stored_version) {
+    if (read_version_from_atecc(&stored_min_version)) {
+        if (new_firmware_version < stored_min_version) {
             rollback_ok = false; // Downgrade detected, immediately reject
-        } else if (manifest->version == stored_version) {
-            // Allow re-flashing the same version if it's the currently running version.
-            if (manifest->version == g_secure_boot.current_version) {
-                rollback_ok = true;
-            } else {
-                // If it's the same version as stored, but not the current running, it's not a true "rollback"
-                // but might imply trying to write an older version than originally provisioned.
-                // For simplicity, let's allow if equal to stored, but a more complex policy could reject.
-                // The main goal is manifest < stored is rejected.
-                 rollback_ok = true;
-            }
-        } else { // manifest->version > stored_version
-            rollback_ok = true; // Upgrade is allowed
+        } else { // new_firmware_version >= stored_min_version
+            rollback_ok = true; // Upgrade or same version allowed
         }
-
     } else {
-        // If version cannot be read from ATECC (e.g., first boot or corrupted slot),
-        // we must not allow an unknown state. Better to fail securely than proceed.
-        // For initial provisioning, `secure_boot_set_current_version` should be called.
-        // If ATECC is enforcing anti-rollback, it means it *should* have a version.
-        // If it cannot be read, it's a security-critical failure.
-        rollback_ok = false;
+        // If version cannot be read from ATECC in production, it's a critical error.
+#if FIRMWARE_PRODUCTION
+        Error_Handler(); // Halt as anti-rollback cannot be checked securely.
+#endif
+        rollback_ok = false; // Cannot proceed without a reliable anti-rollback counter.
     }
     out_result->antirollback_ok = rollback_ok;
   } else {
-    out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled, so a "rollback" is allowed
+    out_result->antirollback_ok = true; // Anti-rollback enforcement is disabled
   }
 
   // 3. Final Acceptance
-  // Only accept if both signature and anti-rollback checks pass
   out_result->accepted = out_result->signature_valid && out_result->antirollback_ok;
 
   // If the new firmware is accepted AND anti-rollback is enforced, update the version counter in ATECC
   if (out_result->accepted && g_secure_boot.policy.enforce_antirollback) {
-      if (!write_version_to_atecc(manifest->version)) {
-          // Failed to update version counter. This is a critical error.
-          // If we can't update ATECC, the integrity of future updates is compromised.
-          // The device might enter a locked state or require manual intervention to recover.
-          out_result->accepted = false; // Reject if version update fails
-          Error_Handler(); // Critical error in production: cannot update anti-rollback counter.
+      // Only write if the new firmware version is greater than the currently stored minimum version.
+      if (new_firmware_version > stored_min_version) {
+          if (!write_version_to_atecc(new_firmware_version)) {
+              // Failed to update version counter. This is a critical error.
+              out_result->accepted = false; // Reject if version update fails
+#if FIRMWARE_PRODUCTION
+              Error_Handler(); // Critical error: cannot update anti-rollback counter.
+#endif
+          }
       }
   }
-  overall_success = true;
+  overall_success = out_result->accepted; // Overall success reflects final acceptance.
 
-end:
-  security_secure_zero(firmware_signature, sizeof(firmware_signature)); // Zeroize sensitive signature
   return overall_success;
 }
