@@ -323,21 +323,23 @@ bool crypto_engine_bind_atecc_slot(uint8_t slot_id,
   if (!g_crypto_state.initialized) {
     crypto_engine_init();
   }
-  if (!g_crypto_state.secure_element_available) {
+  if (!atecc608a_is_available()) { // Check if ATECC is generally available
     return false;
   }
   if (public_key == NULL || public_key_len == 0u || public_key_len > sizeof(g_crypto_state.bound_secure_element_pubkey)) {
     return false;
   }
 
-  // This operation likely involves configuring an ATECC slot or validating a key.
-  // Assuming `atecc608a_bind_slot` exists and performs the secure element configuration or setup.
-  if (atecc608a_bind_slot(slot_id, public_key, public_key_len) == ATECC608A_SUCCESS) {
+  // This operation may involve configuring an ATECC slot, validating a key, or storing public key details.
+  // The `atecc608a_bind_slot` function in the driver layer now takes only slot_id.
+  // If `public_key` is part of the secure element binding, the ATECC driver would ideally manage it internally.
+  // For this mock implementation, we'll assume the driver's default `atecc608a_bind_slot` is sufficient for marking.
+  // If required, `public_key` could be written to a configuration zone or another specific slot.
+  if (atecc608a_bind_slot(slot_id)) { // The driver's `atecc608a_bind_slot` returns bool.
       g_crypto_state.bound_secure_element_slot = slot_id;
+      // Mirroring the public key in crypto_engine_state_t for compatibility, although ATECC might store it securely.
       memcpy(g_crypto_state.bound_secure_element_pubkey, public_key, public_key_len);
       g_crypto_state.bound_secure_element_pubkey_len = public_key_len;
-      // Note: `secure_element_bound` is now removed from crypto_engine_state_t, as `secure_element_available` is primary indicator.
-      // This part of state might be redundant or reflect different aspect of binding.
       return true;
   }
   return false;
