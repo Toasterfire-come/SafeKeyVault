@@ -6,6 +6,7 @@
 
 #include "crypto_engine.h"
 #include "security_utils.h"
+#include "stm32u5xx_hal.h" // Include HAL header for HAL functions
 
 static usb_session_state_t g_session;
 
@@ -211,9 +212,7 @@ void usb_session_init(void) {
 }
 
 bool usb_session_start(usb_session_challenge_t *out_challenge) {
-  // IMPORTANT FOR PRODUCTION: The seed MUST be generated from a cryptographically secure random number generator.
-  // Using zeroed data here is insecure and for demonstration purposes only.
-  uint8_t seed[16] = {0};
+  uint8_t seed[32] = {0}; // Increased size to accommodate UID and Tick
   uint8_t hash[16] = {0};
   bool success = false;
 
@@ -228,9 +227,14 @@ bool usb_session_start(usb_session_challenge_t *out_challenge) {
   g_session.authenticated = false;
   g_challenge_len = 16u;
 
-  // Initialize seed for challenge generation
-  // Removed hardcoded seed: "usb-session-seed"
-  // In a production environment, this seed MUST be generated securely (e.g., from a hardware RNG).
+  // Derive seed from HAL_UID and HAL_GetTick() for better randomness
+  // Concatenate HAL UID parts and current tick value
+  memcpy(seed, &HAL_GetUIDw0(), sizeof(HAL_GetUIDw0()));
+  memcpy(seed + 4, &HAL_GetUIDw1(), sizeof(HAL_GetUIDw1()));
+  memcpy(seed + 8, &HAL_GetUIDw2(), sizeof(HAL_GetUIDw2()));
+  memcpy(seed + 12, &HAL_GetTick(), sizeof(HAL_GetTick()));
+
+  // Hash the derived seed to create the challenge
   crypto_engine_hash16(seed, sizeof(seed), hash);
 
   // Copy hash to global challenge and output challenge
