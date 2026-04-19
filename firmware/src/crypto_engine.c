@@ -336,104 +336,9 @@ bool crypto_engine_encrypt_password(const char *plaintext,
   return n > 0 && (size_t)n < out_len;
 }
 
-bool crypto_engine_decrypt_password(const char *ciphertext,
-                                    char *plaintext_out,
-                                    size_t out_len) {
-  const char *nonce_hex;
-  const char *tag_hex;
-  const char *ciphertext_hex;
-  const char *sep1;
-  const char *sep2;
-  size_t nonce_hex_len;
-  size_t tag_hex_len;
-  size_t ciphertext_hex_len;
-  uint8_t nonce[12];
-  uint8_t tag[16];
-  uint8_t ciphertext_bytes[PASSWORD_MAX_LENGTH];
-  size_t ciphertext_len = 0u;
-  size_t plaintext_len;
-
-  if (ciphertext == NULL || plaintext_out == NULL || out_len < 2u) {
-    return false;
-  }
-  if (!crypto_engine_ready_for_sensitive_ops()) {
-    return false;
-  }
-  plaintext_out[0] = '\0';
-  if (strncmp(ciphertext, "v1:", 3u) != 0) {
-    return false;
-  }
-
-  nonce_hex = ciphertext + 3u;
-  sep1 = strchr(nonce_hex, ':');
-  if (sep1 == NULL) {
-    return false;
-  }
-  tag_hex = sep1 + 1u;
-  sep2 = strchr(tag_hex, ':');
-  if (sep2 == NULL) {
-    return false;
-  }
-  ciphertext_hex = sep2 + 1u;
-
-  nonce_hex_len = (size_t)(sep1 - nonce_hex);
-  tag_hex_len = (size_t)(sep2 - tag_hex);
-  ciphertext_hex_len = strlen(ciphertext_hex);
-
-  if (nonce_hex_len != 24u || tag_hex_len != 32u || ciphertext_hex_len == 0u) {
-    return false;
-  }
-  if (!hex_decode(nonce_hex, nonce_hex_len, nonce, sizeof(nonce), NULL) ||
-      !hex_decode(tag_hex, tag_hex_len, tag, sizeof(tag), NULL) ||
-      !hex_decode(ciphertext_hex, ciphertext_hex_len, ciphertext_bytes, sizeof(ciphertext_bytes), &ciphertext_len)) {
-    return false;
-  }
-
-  plaintext_len = out_len - 1u; // Max length for plaintext_out, reserving space for null terminator
-  bool success;
-
-#if FIRMWARE_PRODUCTION
-  if (!g_crypto_state.secure_element_bound) {
-      return false; // In production, ATECC must always be used
-  }
-  // Use ATECC608A for AEAD decryption
-  // ATECC608A_SLOT_MASTER_KEY holds the key for decryption
-  success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY,
-                                 ciphertext_bytes, ciphertext_len,
-                                 nonce, sizeof(nonce), // Nonce as AAD
-                                 tag,
-                                 (uint8_t *)plaintext_out, plaintext_len, &plaintext_len);
-#else
-  if (!g_crypto_state.secure_element_bound) {
-      // Fallback to stub for development builds if ATECC is not bound or fails.
-      success = crypto_stub_decrypt_password((const char*)ciphertext_bytes, plaintext_out, out_len);
-      if (success) {
-          plaintext_len = strlen(plaintext_out); // Stub returns null-terminated string.
-      } else {
-            security_secure_zero(plaintext_out, out_len); // Clear output on stub failure
-      }
-  } else {
-      // Use ATECC608A for AEAD decryption even in dev mode if bound.
-      success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY,
-                                     ciphertext_bytes, ciphertext_len,
-                                     nonce, sizeof(nonce),
-                                     tag,
-                                     (uint8_t *)plaintext_out, plaintext_len, &plaintext_len);
-  }
-#endif
-
-  if (!success) {
-    security_secure_zero(plaintext_out, out_len); // Zeroize plaintext buffer on failure
-    return false;
-  }
-  return true;
-}
-
-  security_secure_zero(ciphertext_bytes, sizeof(ciphertext_bytes));
-  security_secure_zero(tag, sizeof(tag));
-  security_secure_zero(nonce, sizeof(nonce));
-  return true;
-}
+// Removed duplicate/malformed crypto_engine_decrypt_password section
+// The corrected crypto_engine_decrypt_password and crypto_engine_decrypt_aead functions
+// are present below.
 
 // Ensure the plaintext is an actual null-terminated string for strlen to be safe.
 void crypto_engine_password_fingerprint(const char *password,
@@ -780,10 +685,6 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
                                 uint8_t *plaintext,
                                 size_t plaintext_capacity,
                                 size_t *plaintext_len) {
-  size_t i;
-  uint8_t expected_tag[16];
-  uint8_t mac_input[64];
-
   if (ciphertext == NULL || plaintext == NULL || plaintext_len == NULL || tag == NULL) {
     return false;
   }
@@ -794,65 +695,140 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
     return false;
   }
 
+  bool success = false;
+
 #if FIRMWARE_PRODUCTION
-  if (!g_crypto_state.secure_element_bound) {
-      return false; // ATECC must be bound in production
+  if (!g_crypto_state.secure_element_available || !g_crypto_state.master_key_provisioned) {
+      Error_Handler(); // Critical error in production
+      return false;
   }
   // Use ATECC608A for AEAD decryption.
-  success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY,
+  // ATECC is expected to verify the tag internally and only then return plaintext.
+  success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Master key handle/slot
                                    ciphertext, ciphertext_len,
                                    aad, aad_len,
-                                   tag, // ATECC driver must verify this tag internally
+                                   tag, // ATECC driver must verify this tag internally during decryption
                                    plaintext, plaintext_capacity, plaintext_len);
 #else // Development/non-production build
-  uint8_t expected_tag[16]; // Only used in stub/software fallback
-  if (!g_crypto_state.secure_element_bound) {
-      // Fallback to stub for development builds if ATECC is not bound.
-      // THIS IS NOT A SECURE IMPLEMENTATION FOR PRODUCTION.
-      uint8_t mac_input[64]; // For stub's MAC calculation (if enabled)
-      for (i = 0u; i < ciphertext_len && i < plaintext_capacity; ++i) {
-          plaintext[i] = ciphertext[i] ^ (uint8_t)(i % 256); // Simple stream cipher for stub
-      }
-      *plaintext_len = ciphertext_len;
-      // For the stub implementation, we re-hash to get the expected tag.
-      // This is a simplified MAC calculation.
-      memset(mac_input, 0, sizeof(mac_input));
-      size_t current_mac_input_len = 0;
-      if (aad != NULL && aad_len > 0) {
-          memcpy(mac_input, aad, (aad_len > sizeof(mac_input)) ? sizeof(mac_input) : aad_len);
-          current_mac_input_len = (aad_len > sizeof(mac_input)) ? sizeof(mac_input) : aad_len;
-      }
-      if (*plaintext_len > 0) {
-          size_t copy_len = (*plaintext_len > (sizeof(mac_input) - current_mac_input_len)) ? (sizeof(mac_input) - current_mac_input_len) : *plaintext_len;
-          memcpy(mac_input + current_mac_input_len, plaintext, copy_len);
-          current_mac_input_len += copy_len;
-      }
-      crypto_stub_hash16(mac_input, current_mac_input_len, expected_tag);
+  // Fallback for development builds (not secure for production)
+  // Inverse of the XOR-based stream cipher with HMAC-like tag verification.
+  uint8_t dev_key_stream[64]; // Pseudo-random stream used for encryption simulation
+  crypto_engine_hash256(aad, aad_len, dev_key_stream);
+  crypto_engine_hash256(dev_key_stream, sizeof(dev_key_stream), dev_key_stream + 32); // Expand key stream
 
-      // Verify stub tag
-      if (!sec_consttime_memeq(expected_tag, tag, 16u)) {
-          security_secure_zero(expected_tag, sizeof(expected_tag));
-          security_secure_zero(mac_input, sizeof(mac_input));
-          security_secure_zero(plaintext, *plaintext_len); // Zeroize plaintext on auth failure
-          *plaintext_len = 0; // Indicate no plaintext output
-          return false;
-      }
-      security_secure_zero(expected_tag, sizeof(expected_tag));
-      security_secure_zero(mac_input, sizeof(mac_input));
-      success = true; // Decryption succeeded for stub path
-  } else {
-      // If ATECC is available in development, use it.
-      success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY,
-                                       ciphertext, ciphertext_len,
-                                       aad, aad_len,
-                                       tag,
-                                       plaintext, plaintext_capacity, plaintext_len);
+  for (size_t i = 0u; i < ciphertext_len && i < plaintext_capacity; ++i) {
+      plaintext[i] = ciphertext[i] ^ dev_key_stream[i % sizeof(dev_key_stream)];
   }
+  *plaintext_len = ciphertext_len;
+
+  // Re-calculate the expected tag based on the decrypted plaintext and AAD (for verification)
+  uint8_t calculated_tag_input_buffer[aad_len + *plaintext_len];
+  if (aad != NULL && aad_len > 0) {
+      memcpy(calculated_tag_input_buffer, aad, aad_len);
+  }
+  memcpy(calculated_tag_input_buffer + aad_len, plaintext, *plaintext_len);
+  uint8_t full_calculated_tag_hash[32];
+  crypto_engine_hash256(calculated_tag_input_buffer, aad_len + *plaintext_len, full_calculated_tag_hash);
+  uint8_t expected_tag_from_calc[16];
+  memcpy(expected_tag_from_calc, full_calculated_tag_hash, 16); // Truncate to 16 bytes for tag
+
+  // Verify the tag in constant time
+  if (!sec_consttime_memeq(expected_tag_from_calc, tag, 16u)) {
+      security_secure_zero(plaintext, plaintext_capacity); // Zeroize plaintext on authentication failure
+      *plaintext_len = 0; // Indicate no plaintext was successfully decrypted
+      success = false;
+  } else {
+      success = true;
+  }
+  security_secure_zero(dev_key_stream, sizeof(dev_key_stream));
+  security_secure_zero(calculated_tag_input_buffer, sizeof(calculated_tag_input_buffer));
+  security_secure_zero(full_calculated_tag_hash, sizeof(full_calculated_tag_hash));
+  security_secure_zero(expected_tag_from_calc, sizeof(expected_tag_from_calc));
 #endif
 
   if (!success) {
-      security_secure_zero(plaintext, ciphertext_len); // Zeroize plaintext on failure
-      return false;
+      security_secure_zero(plaintext, plaintext_capacity); // Ensure plaintext is zeroized on any failure path
+      *plaintext_len = 0;
   }
-  return true;
+  return success;
+}
+
+bool crypto_engine_decrypt_password(const char *ciphertext_formatted,
+                                    char *plaintext_out,
+                                    size_t out_len) {
+  const char *aad_hex_str;
+  const char *tag_hex_str;
+  const char *raw_ciphertext_hex_str;
+  const char *sep1;
+  const char *sep2;
+  size_t aad_hex_len;
+  size_t tag_hex_len;
+  size_t raw_ciphertext_hex_len;
+  uint8_t aad_bytes[12];
+  uint8_t tag_bytes[16];
+  uint8_t raw_ciphertext_bytes[PASSWORD_MAX_LENGTH];
+  size_t raw_ciphertext_bytes_len = 0u;
+  size_t decrypted_plaintext_len;
+
+  if (ciphertext_formatted == NULL || plaintext_out == NULL || out_len < 2u) {
+    return false;
+  }
+  if (!crypto_engine_ready_for_sensitive_ops()) {
+    return false;
+  }
+  plaintext_out[0] = '\0'; // Ensure null termination from start
+
+  // Expected format: "v1:aad_hex:tag_hex:ciphertext_hex"
+  if (strncmp(ciphertext_formatted, "v1:", 3u) != 0) {
+    return false; // Wrong version or format
+  }
+
+  aad_hex_str = ciphertext_formatted + 3u;
+  sep1 = strchr(aad_hex_str, ':');
+  if (sep1 == NULL) {
+    return false; // Malformed
+  }
+  tag_hex_str = sep1 + 1u;
+  sep2 = strchr(tag_hex_str, ':');
+  if (sep2 == NULL) {
+    return false; // Malformed
+  }
+  raw_ciphertext_hex_str = sep2 + 1u;
+
+  aad_hex_len = (size_t)(sep1 - aad_hex_str);
+  tag_hex_len = (size_t)(sep2 - tag_hex_str);
+  raw_ciphertext_hex_len = strlen(raw_ciphertext_hex_str);
+
+  // Validate hex string lengths
+  if (aad_hex_len != 24u || tag_hex_len != 32u || raw_ciphertext_hex_len == 0u) {
+    return false;
+  }
+
+  // Decode hex strings to bytes
+  if (!hex_decode(aad_hex_str, aad_hex_len, aad_bytes, sizeof(aad_bytes), NULL) ||
+      !hex_decode(tag_hex_str, tag_hex_len, tag_bytes, sizeof(tag_bytes), NULL) ||
+      !hex_decode(raw_ciphertext_hex_str, raw_ciphertext_hex_len, raw_ciphertext_bytes, sizeof(raw_ciphertext_bytes), &raw_ciphertext_bytes_len)) {
+    return false;
+  }
+
+  decrypted_plaintext_len = out_len - 1u; // Max length for plaintext_out, reserving space for null terminator
+
+  bool success = crypto_engine_decrypt_aead(raw_ciphertext_bytes, raw_ciphertext_bytes_len,
+                                            aad_bytes, sizeof(aad_bytes),
+                                            tag_bytes,
+                                            (uint8_t *)plaintext_out, decrypted_plaintext_len, &decrypted_plaintext_len);
+  
+  if (success) {
+      plaintext_out[decrypted_plaintext_len] = '\0'; // Null-terminate the output.
+  } else {
+      security_secure_zero(plaintext_out, out_len); // Zeroize on failure.
+      plaintext_out[0] = '\0';
+  }
+
+  // Zeroize intermediate sensitive data
+  security_secure_zero(raw_ciphertext_bytes, sizeof(raw_ciphertext_bytes));
+  security_secure_zero(tag_bytes, sizeof(tag_bytes));
+  security_secure_zero(aad_bytes, sizeof(aad_bytes));
+  
+  return success;
 }
