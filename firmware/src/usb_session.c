@@ -211,7 +211,7 @@ void usb_session_init(void) {
 }
 
 bool usb_session_start(usb_session_challenge_t *out_challenge) {
-  uint8_t seed[16] = {0};
+  uint8_t seed[16] = {0}; // Initialize seed with zeros. In production, this should be a securely generated random value.
   uint8_t hash[16] = {0};
   bool success = false;
 
@@ -227,7 +227,8 @@ bool usb_session_start(usb_session_challenge_t *out_challenge) {
   g_challenge_len = 16u;
 
   // Initialize seed for challenge generation
-  memcpy(seed, "usb-session-seed", sizeof(seed)); // Use sizeof(seed) to ensure full copy if smaller
+  // Removed hardcoded seed: "usb-session-seed"
+  // In a production environment, this seed MUST be generated securely (e.g., from a hardware RNG).
   crypto_engine_hash16(seed, sizeof(seed), hash);
 
   // Copy hash to global challenge and output challenge
