@@ -1,0 +1,25 @@
+Reference,Qty,Value,Footprint,LCSC,Description
+U1,1,STM32U535RETxQ,Package_QFP:LQFP-64_10x10mm_P0.5mm,C5135610,STM32U5 Microcontroller
+U3,1,AMS1117-3.3,Package_TO_SOT_SMD:SOT-223-3_TabPin2,C6186,3.3V LDO Regulator
+U4,1,W25Q128JVFIQ TR,Package_SO:SOIC-16_3.9x9.9mm_P1.27mm,C97521,128Mb SPI Flash
+U5,1,W25Q128JVFIQ,Package_SO:SOIC-16_3.9x9.9mm_P1.27mm,C97521,128Mb SPI Flash
+U6,1,ATECC608A-SSHDA-T,Package_TO_SOT_SMD:SOT-23-8,C2681877,Crypto Authentication IC
+U7,1,TTP223-BA6,Package_TO_SOT_SMD:SOT-23-6,C80598,Capacitive Touch Sensor
+J1,1,USB_C_Receptacle,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,C2765186,USB-C Receptacle
+D1,1,USBLC6-2SC6,Package_TO_SOT_SMD:SOT-23-6,C7519,USB ESD Protection
+D2,1,APA102,LED_SMD:LED-APA102-2020,C92504,Addressable RGB LED
+D3,1,APA102,LED_SMD:LED-APA102-2020,C92504,Addressable RGB LED
+X1,1,16MHz,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,C9002485,16MHz Crystal Oscillator
+L1,1,4.7µH,Inductor_SMD:L_0603_1608Metric,C1046,4.7uH Inductor
+R1,1,5.1kΩ,Resistor_SMD:R_0603_1608Metric,C23186,5.1k Resistor CC1
+R2,1,5.1kΩ,Resistor_SMD:R_0603_1608Metric,C23186,5.1k Resistor CC2
+R3,1,4.7kΩ,Resistor_SMD:R_0603_1608Metric,C23162,4.7k I2C Pull-up SDA
+R5,1,4.7kΩ,Resistor_SMD:R_0603_1608Metric,C23162,4.7k I2C Pull-up SCL
+C1,1,100nF,Capacitor_SMD:C_0603_1608Metric,C14663,100nF Decoupling VBAT
+C2,1,12pF,Capacitor_SMD:C_0603_1608Metric,C1634,12pF Crystal Load Cap
+C3,1,12pF,Capacitor_SMD:C_0603_1608Metric,C1634,12pF Crystal Load Cap
+C4,1,1µF,Capacitor_SMD:C_0603_1608Metric,C15849,1uF VDD11 Filter Cap
+C5,1,100nF,Capacitor_SMD:C_0603_1608Metric,C14663,100nF LED Decoupling D2
+C6,1,100nF,Capacitor_SMD:C_0603_1608Metric,C14663,100nF LED Decoupling D3
+U11,1,100nF,Capacitor_SMD:C_0603_1608Metric,C14663,100nF Touch Sense Cap
+CN1,1,FTSH-105-01-L-DV-K-TR,Connector_TagConnect:TC2030-IDC-NL_2x03_P1.27mm_Vertical,DNP,SWD Debug Connector - Do Not Place
