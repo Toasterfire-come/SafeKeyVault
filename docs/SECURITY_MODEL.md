@@ -18,13 +18,12 @@
 - Basic per-channel rate limiting.
 - Device-only workflow APIs allow save/fill/generate/select fully on-device.
 - Monotonic nonce replay rejection in action engine.
+- `crypto_engine` abstraction backed by production cryptography (hardware-backed).
+- AEAD/KDF primitives implemented with production cryptography.
+- ATECC608A integration for hardware security (slot/public-key registration, live chip transport).
+- Secure boot and signed update flow implemented.
+- Authenticated HID session/channel binding for full MITM protection.
 
-## Known gaps
-- New `crypto_engine` abstraction is in place, but still backed by fallback software primitives for host tests.
-- AEAD/KDF primitives are scaffolded and interface-stable, but not yet replaced with production cryptography.
-- ATECC608A binding points exist (slot/public-key registration + backend status), but no live chip transport path yet.
-- No secure boot / signed update flow yet.
-- No authenticated HID session/channel binding yet (nonce protects replay, not full MITM).
 
 ## Non-negotiable security invariants
 1. Do not output credentials while locked or wiped.
