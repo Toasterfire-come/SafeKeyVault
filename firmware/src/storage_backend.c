@@ -1,22 +1,21 @@
+#include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "stm32u5xx_hal.h" // Include HAL header for FLASH operations
+
 #include "storage_backend.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
-#include "crypto_engine.h" // For secure zeroization
-
-// Define flash sector addresses and sizes. These are placeholders and must be
-// configured based on the specific STM32U5xx microcontroller and memory map.
-// Example: Assuming two sectors of 16KB each for dual-bank storage.
-// These values should be derived from the device's datasheet or HAL configuration.
-#define FLASH_SECTOR_SIZE_BYTES (16 * 1024) // Example sector size
-#define FLASH_SECTOR_A_ADDR     (FLASH_BASE + 0x00000) // Example address for Sector A
-#define FLASH_SECTOR_B_ADDR     (FLASH_BASE + FLASH_SECTOR_SIZE_BYTES) // Example address for Sector B
+// Define flash sector addresses and sizes (these are examples, adjust as needed for your specific MCU)
+// These should be defined based on the STM32U5xx reference manual and your linker script.
+// For example, if using the first two 16KB sectors:
+#define FLASH_SECTOR_A_ADDR 0x08000000 // Start of Flash Sector 0
+#define FLASH_SECTOR_B_ADDR 0x08004000 // Start of Flash Sector 1 (assuming 16KB sectors)
+#define FLASH_SECTOR_SIZE   0x4000     // 16KB sector size
+#define FLASH_BANK_SIZE     0x200000   // Example: 2MB total flash size (adjust if needed)
 
 // Ensure that the total payload size does not exceed the sector size minus metadata.
-#if STORAGE_BACKEND_MAX_PAYLOAD > (FLASH_SECTOR_SIZE_BYTES - sizeof(storage_slot_header_t))
+#if STORAGE_BACKEND_MAX_PAYLOAD > (FLASH_SECTOR_SIZE - sizeof(storage_slot_header_t))
 #error "STORAGE_BACKEND_MAX_PAYLOAD is too large for the configured flash sector size."
 #endif
 
@@ -34,7 +33,6 @@ typedef struct {
 
 static bool g_storage_initialized = false;
 
-// Helper function to calculate a simple CRC8 for the header
 static uint8_t calculate_crc8(const uint8_t *data, size_t len) {
     uint8_t crc = 0u;
     for (size_t i = 0; i < len; ++i) {
@@ -43,17 +41,16 @@ static uint8_t calculate_crc8(const uint8_t *data, size_t len) {
     return crc;
 }
 
-// Helper function to read a flash sector into memory
 static bool read_flash_sector(uint32_t address, uint8_t *buffer, size_t size) {
-    // Basic address validation. More robust checks might be needed depending on memory map.
-    if (address < FLASH_BASE || address >= (FLASH_BASE + FLASH_BANK_SIZE)) { // Assuming FLASH_BANK_SIZE is defined in HAL
+    // Basic address validation.
+    if (address < FLASH_BASE || address >= (FLASH_BASE + FLASH_BANK_SIZE)) {
         return false;
     }
+    // Read directly from the memory-mapped flash address.
     memcpy(buffer, (uint8_t *)address, size);
     return true;
 }
 
-// Helper function to write to a flash sector (erasing first)
 static bool write_flash_sector(uint32_t address, const uint8_t *data, size_t size) {
     HAL_StatusTypeDef status;
     uint32_t sector_error;
@@ -65,65 +62,70 @@ static bool write_flash_sector(uint32_t address, const uint8_t *data, size_t siz
 
     // Unlock flash
     status = HAL_FLASH_Unlock();
-    if (status != HAL_OK) return false;
-
-    // Erase the target sector
-    FLASH_EraseInitTypeDef erase_init_struct;
-    erase_init_struct.TypeErase = FLASH_TYPEERASE_SECTORS;
-    // Determine the sector number from the address
-    // This mapping is highly dependent on the STM32 device.
-    // For STM32U5xx, you'd need to consult the reference manual for sector mapping.
-    // Example for a hypothetical mapping:
-    uint32_t sector_number;
-    // This mapping needs to be correctly implemented based on the specific STM32U5xx device.
-    // For example, on STM32U573, sectors 0-3 are 16KB, sectors 4-7 are 128KB.
-    // You would need to map FLASH_SECTOR_A_ADDR and FLASH_SECTOR_B_ADDR to the correct FLASH_SECTOR_X defines.
-    // For demonstration purposes, we'll assume a simple mapping.
-    if (address == FLASH_SECTOR_A_ADDR) sector_number = FLASH_SECTOR_0; // Example sector number
-    else if (address == FLASH_SECTOR_B_ADDR) sector_number = FLASH_SECTOR_1; // Example sector number
-    else {
-        HAL_FLASH_Lock(); // Lock flash before returning
-        return false; // Unknown sector address
-    }
-
-    erase_init_struct.Sector = sector_number;
-    erase_init_struct.NbSectors = 1; // Erase only one sector
-
-    status = HAL_FLASHEx_Erase(&erase_init_struct, &sector_error);
     if (status != HAL_OK) {
-        HAL_FLASH_Lock();
         return false;
     }
 
-    // Program the data
-    for (size_t i = 0; i < size; ++i) {
+    // Erase the sector before writing
+    FLASH_EraseInitTypeDef erase_init;
+    erase_init.TypeErase = FLASH_TYPEERASE_SECTORS; // Use sector erase
+    // Determine the sector number from the address. This mapping is device-specific.
+    // You need to consult the STM32U5xx reference manual for the correct sector mapping.
+    // Example for STM32U573, sectors 0-3 are 16KB, sectors 4-7 are 128KB.
+    uint32_t sector_number;
+    if (address == FLASH_SECTOR_A_ADDR) {
+        sector_number = FLASH_SECTOR_0; // Assuming Sector A is Sector 0
+    } else if (address == FLASH_SECTOR_B_ADDR) {
+        sector_number = FLASH_SECTOR_1; // Assuming Sector B is Sector 1
+    } else {
+        HAL_FLASH_Lock(); // Lock flash before returning
+        return false; // Unknown sector address
+    }
+    erase_init.Sector = sector_number;
+    erase_init.NbSectors = 1; // Erase only one sector
+
+    status = HAL_FLASHEx_Erase(&erase_init, &sector_error);
+    if (status != HAL_OK) {
+        HAL_FLASH_Lock(); // Lock flash before returning
+        return false;
+    }
+
+    // Program the data in 32-bit words for efficiency
+    for (size_t i = 0; i < size; i += 4) {
+        uint32_t data_word = 0;
+        // Copy up to 4 bytes for the current word, handling the end of the data
+        size_t bytes_to_copy = (size - i < 4) ? (size - i) : 4;
+        memcpy(&data_word, data + i, bytes_to_copy);
+
         // Ensure we don't write past the end of the sector if size is smaller than sector size
-        if (address + i >= (address + FLASH_SECTOR_SIZE_BYTES)) break;
-        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, address + i, data[i]);
+        if (address + i >= (address + FLASH_SECTOR_SIZE)) break;
+
+        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address + i, data_word);
         if (status != HAL_OK) {
-            HAL_FLASH_Lock();
+            HAL_FLASH_Lock(); // Lock flash before returning
             return false;
         }
     }
 
     // Lock flash
     status = HAL_FLASH_Lock();
-    if (status != HAL_OK) return false;
+    if (status != HAL_OK) {
+        return false;
+    }
 
     return true;
 }
 
-// Helper function to check if a slot is valid and has a valid header CRC
 static bool is_slot_valid(const storage_slot_internal_t *slot) {
+    // Check for null pointer, zero payload length, or payload exceeding max capacity
     if (!slot || slot->header.payload_len == 0 || slot->header.payload_len > STORAGE_BACKEND_MAX_PAYLOAD) {
         return false;
     }
     // Recalculate CRC and compare
-    uint8_t calculated_crc = calculate_crc8((uint8_t *)&slot->header, sizeof(storage_slot_header_t) - 1); // Exclude CRC field itself
+    uint8_t calculated_crc = calculate_crc8((uint8_t *)&slot->header, sizeof(storage_slot_header_t) - sizeof(slot->header.crc8));
     return calculated_crc == slot->header.crc8[0];
 }
 
-// Helper function to get the generation of a slot
 static uint32_t get_slot_generation(const storage_slot_internal_t *slot) {
     // If slot is invalid or not initialized, generation is considered 0.
     if (!slot || slot->header.payload_len == 0) {
@@ -132,7 +134,6 @@ static uint32_t get_slot_generation(const storage_slot_internal_t *slot) {
     return slot->header.generation;
 }
 
-// Helper function to determine which slot is newer
 static bool slot_newer(const storage_slot_internal_t *a, const storage_slot_internal_t *b) {
     // If 'a' is invalid, it cannot be newer.
     if (!a || a->header.payload_len == 0) return false;
@@ -145,21 +146,24 @@ static bool slot_newer(const storage_slot_internal_t *a, const storage_slot_inte
 void storage_backend_init(void) {
     if (g_storage_initialized) return;
 
-    // Initialize flash HAL (unlocking might be needed for reads/writes)
-    HAL_FLASH_Unlock();
-    HAL_FLASH_Lock(); // Lock immediately after unlock if no operations are performed yet.
+    // Initialize flash HAL. Unlocking is handled within write operations.
+    // HAL_FLASH_Unlock(); // Not needed here, done in write_flash_sector
+    // HAL_FLASH_Lock();   // Not needed here, done in write_flash_sector
 
     storage_slot_internal_t slot_a, slot_b;
-    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE_BYTES);
-    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE_BYTES);
+    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
+    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
-    // Validate slots based on read success and header CRC
-    if (!slot_a_read_ok || !is_slot_valid(&slot_a)) {
-        slot_a.header.payload_len = 0; // Mark as invalid
-    }
-    if (!slot_b_read_ok || !is_slot_valid(&slot_b)) {
-        slot_b.header.payload_len = 0; // Mark as invalid
-    }
+    // Initialize debug state based on read results
+    storage_backend_debug_t debug_state;
+    debug_state.slot_a_valid = slot_a_read_ok && is_slot_valid(&slot_a);
+    debug_state.slot_b_valid = slot_b_read_ok && is_slot_valid(&slot_b);
+    debug_state.slot_a_generation = debug_state.slot_a_valid ? slot_a.header.generation : 0;
+    debug_state.slot_b_generation = debug_state.slot_b_valid ? slot_b.header.generation : 0;
+
+    // If neither slot is valid, the storage is considered empty.
+    // A more robust implementation might erase and initialize one slot here.
+    // For now, we rely on subsequent writes to populate the storage.
 
     g_storage_initialized = true;
 }
@@ -167,43 +171,39 @@ void storage_backend_init(void) {
 bool storage_backend_write_atomic(const uint8_t *payload,
                                   size_t payload_len,
                                   uint32_t schema_version) {
-    if (!g_storage_initialized || payload == NULL) {
-        return false;
-    }
-    if (payload_len == 0u || payload_len > STORAGE_BACKEND_MAX_PAYLOAD) {
-        return false;
-    }
-    if (schema_version == 0u) { // Schema version 0 is invalid
+    if (!g_storage_initialized || payload == NULL || payload_len == 0 || payload_len > STORAGE_BACKEND_MAX_PAYLOAD) {
         return false;
     }
 
     storage_slot_internal_t slot_a, slot_b;
-    uint32_t next_generation = 1u;
+    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
+    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
-    // Read current slots to determine the next generation
-    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE_BYTES);
-    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE_BYTES);
-
-    // Validate slots before determining generation
+    // Determine the next generation number
+    uint32_t next_generation = 0;
     bool valid_a = slot_a_read_ok && is_slot_valid(&slot_a);
     bool valid_b = slot_b_read_ok && is_slot_valid(&slot_b);
 
-    // Determine the next generation number
-    uint32_t gen_a = valid_a ? get_slot_generation(&slot_a) : 0;
-    uint32_t gen_b = valid_b ? get_slot_generation(&slot_b) : 0;
-    next_generation = (gen_a > gen_b ? gen_a : gen_b) + 1u;
+    if (valid_a && valid_b) {
+        next_generation = (slot_a.header.generation > slot_b.header.generation ? slot_a.header.generation : slot_b.header.generation) + 1;
+    } else if (valid_a) {
+        next_generation = slot_a.header.generation + 1;
+    } else if (valid_b) {
+        next_generation = slot_b.header.generation + 1;
+    } else {
+        // If both slots are invalid, start from generation 1
+        next_generation = 1;
+    }
 
-    // Prepare the new slot data
     storage_slot_internal_t new_slot;
-    memset(&new_slot, 0, sizeof(new_slot)); // Zero out the entire structure first
     new_slot.header.generation = next_generation;
     new_slot.header.schema_version = schema_version;
     new_slot.header.payload_len = (uint32_t)payload_len;
     memcpy(new_slot.payload, payload, payload_len);
     // Calculate CRC for the header (excluding the CRC field itself)
-    new_slot.header.crc8[0] = calculate_crc8((uint8_t *)&new_slot.header, sizeof(storage_slot_header_t) - 1);
+    new_slot.header.crc8[0] = calculate_crc8((uint8_t *)&new_slot.header, sizeof(storage_slot_header_t) - sizeof(new_slot.header.crc8));
 
-    // Determine which sector to write to (the older one)
+    // Determine which slot to write to (the older one)
     uint32_t write_address;
     if (!valid_a) {
         write_address = FLASH_SECTOR_A_ADDR; // Slot A is invalid, write there
@@ -214,28 +214,26 @@ bool storage_backend_write_atomic(const uint8_t *payload,
         write_address = slot_newer(&slot_a, &slot_b) ? FLASH_SECTOR_B_ADDR : FLASH_SECTOR_A_ADDR;
     }
 
-    // Write to flash
-    if (write_flash_sector(write_address, (uint8_t *)&new_slot, FLASH_SECTOR_SIZE_BYTES)) {
+    // Write to the chosen flash sector
+    if (write_flash_sector(write_address, (uint8_t *)&new_slot, sizeof(storage_slot_internal_t))) {
         return true;
-    } else {
-        // Write failed. In a real system, more sophisticated error handling/recovery might be needed.
-        return false;
     }
+
+    return false;
 }
 
 bool storage_backend_read_latest(uint8_t *out_payload,
                                  size_t out_capacity,
                                  size_t *out_len,
                                  uint32_t *out_schema_version) {
-    if (!g_storage_initialized || out_payload == NULL || out_len == NULL || out_schema_version == NULL) {
+    if (!g_storage_initialized || !out_payload || !out_len || !out_schema_version) {
         return false;
     }
 
     storage_slot_internal_t slot_a, slot_b;
-    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE_BYTES);
-    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE_BYTES);
+    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
+    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
-    // Validate slots
     bool valid_a = slot_a_read_ok && is_slot_valid(&slot_a);
     bool valid_b = slot_b_read_ok && is_slot_valid(&slot_b);
 
@@ -248,16 +246,22 @@ bool storage_backend_read_latest(uint8_t *out_payload,
     } else if (valid_b) {
         latest_slot = &slot_b;
     } else {
-        return false; // No valid slots found
+        // No valid slots found
+        *out_len = 0;
+        *out_schema_version = 0;
+        return false;
     }
 
-    // Check if the payload fits and is not empty
-    if (latest_slot->header.payload_len == 0 || latest_slot->header.payload_len > out_capacity) {
+    // Copy data to output buffers
+    if (latest_slot->header.payload_len > out_capacity) {
+        // Payload is too large for the provided buffer
+        *out_len = 0;
+        *out_schema_version = 0;
         return false;
     }
 
     memcpy(out_payload, latest_slot->payload, latest_slot->header.payload_len);
-    *out_len = (size_t)latest_slot->header.payload_len;
+    *out_len = latest_slot->header.payload_len;
     *out_schema_version = latest_slot->header.schema_version;
 
     return true;
@@ -269,8 +273,8 @@ bool storage_backend_debug_state(storage_backend_debug_t *out_debug) {
     }
 
     storage_slot_internal_t slot_a, slot_b;
-    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE_BYTES);
-    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE_BYTES);
+    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
+    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
     out_debug->slot_a_valid = slot_a_read_ok && is_slot_valid(&slot_a);
     out_debug->slot_b_valid = slot_b_read_ok && is_slot_valid(&slot_b);
@@ -286,13 +290,12 @@ bool storage_backend_debug_corrupt_latest(void) {
     }
 
     storage_slot_internal_t slot_a, slot_b;
-    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE_BYTES);
-    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE_BYTES);
+    bool slot_a_read_ok = read_flash_sector(FLASH_SECTOR_A_ADDR, (uint8_t *)&slot_a, FLASH_SECTOR_SIZE);
+    bool slot_b_read_ok = read_flash_sector(FLASH_SECTOR_B_ADDR, (uint8_t *)&slot_b, FLASH_SECTOR_SIZE);
 
     storage_slot_internal_t *target_slot = NULL;
-    uint32_t write_address = 0;
+    uint32_t target_address = 0;
 
-    // Validate slots
     bool valid_a = slot_a_read_ok && is_slot_valid(&slot_a);
     bool valid_b = slot_b_read_ok && is_slot_valid(&slot_b);
 
@@ -300,40 +303,27 @@ bool storage_backend_debug_corrupt_latest(void) {
         // Both valid, pick the newer one to corrupt
         if (slot_newer(&slot_a, &slot_b)) {
             target_slot = &slot_a;
-            write_address = FLASH_SECTOR_A_ADDR;
+            target_address = FLASH_SECTOR_A_ADDR;
         } else {
             target_slot = &slot_b;
-            write_address = FLASH_SECTOR_B_ADDR;
+            target_address = FLASH_SECTOR_B_ADDR;
         }
     } else if (valid_a) {
         target_slot = &slot_a;
-        write_address = FLASH_SECTOR_A_ADDR;
+        target_address = FLASH_SECTOR_A_ADDR;
     } else if (valid_b) {
         target_slot = &slot_b;
-        write_address = FLASH_SECTOR_B_ADDR;
+        target_address = FLASH_SECTOR_B_ADDR;
     } else {
-        return false; // No valid slot to corrupt
+        // No valid slots to corrupt
+        return false;
     }
 
-    // Ensure the slot has data to corrupt
-    if (target_slot->header.payload_len == 0) {
-        return false; // Slot is empty or invalid
-    }
-
-    // Corrupt the first byte of the payload
-    uint8_t corrupted_payload[STORAGE_BACKEND_MAX_PAYLOAD];
-    memcpy(corrupted_payload, target_slot->payload, target_slot->header.payload_len);
-    corrupted_payload[0] ^= 0x7Au; // Flip some bits
-
-    // Re-prepare the slot with corrupted payload and updated CRC
-    storage_slot_internal_t corrupted_slot;
-    memcpy(&corrupted_slot, target_slot, sizeof(storage_slot_internal_t)); // Copy existing data
-    memcpy(corrupted_slot.payload, corrupted_payload, target_slot->header.payload_len);
-    // Recalculate CRC for the header
-    corrupted_slot.header.crc8[0] = calculate_crc8((uint8_t *)&corrupted_slot.header, sizeof(storage_slot_header_t) - 1);
+    // Corrupt the CRC by incrementing it
+    target_slot->header.crc8[0]++;
 
     // Write the corrupted slot back to flash
-    return write_flash_sector(write_address, (uint8_t *)&corrupted_slot, FLASH_SECTOR_SIZE_BYTES);
+    return write_flash_sector(target_address, (uint8_t *)target_slot, sizeof(storage_slot_internal_t));
 }
 
 bool storage_backend_wipe(void) {
@@ -346,16 +336,41 @@ bool storage_backend_wipe(void) {
 
     // Unlock flash
     status = HAL_FLASH_Unlock();
-    if (status != HAL_OK) return false;
+    if (status != HAL_OK) {
+        return false;
+    }
 
-    // Erase both sectors
-    FLASH_EraseInitTypeDef erase_init_struct;
-    erase_init_struct.TypeErase = FLASH_TYPEERASE_SECTORS;
-    // Again, sector mapping is device-specific. Assuming Sector 0 and Sector 1 are the target sectors.
-    erase_init_struct.Sector = FLASH_SECTOR_0; // Example: Start with Sector 0
-    erase_init_struct.NbSectors = 2; // Erase two sectors (Sector 0 and Sector 1)
+    // Erase Sector A
+    FLASH_EraseInitTypeDef erase_init_a;
+    erase_init_a.TypeErase = FLASH_TYPEERASE_SECTORS;
+    // Determine the sector number for Sector A
+    uint32_t sector_number_a;
+    if (FLASH_SECTOR_A_ADDR == 0x08000000) sector_number_a = FLASH_SECTOR_0;
+    else if (FLASH_SECTOR_A_ADDR == 0x08004000) sector_number_a = FLASH_SECTOR_1;
+    else { /* Handle other sector mappings if necessary */ return false; }
+    erase_init_a.Sector = sector_number_a;
+    erase_init_a.NbSectors = 1;
+    erase_init_a.Banks = FLASH_BANK_1; // Adjust if using multiple banks
 
-    status = HAL_FLASHEx_Erase(&erase_init_struct, &sector_error);
+    status = HAL_FLASHEx_Erase(&erase_init_a, &sector_error);
+    if (status != HAL_OK) {
+        HAL_FLASH_Lock();
+        return false;
+    }
+
+    // Erase Sector B
+    FLASH_EraseInitTypeDef erase_init_b;
+    erase_init_b.TypeErase = FLASH_TYPEERASE_SECTORS;
+    // Determine the sector number for Sector B
+    uint32_t sector_number_b;
+    if (FLASH_SECTOR_B_ADDR == 0x08000000) sector_number_b = FLASH_SECTOR_0;
+    else if (FLASH_SECTOR_B_ADDR == 0x08004000) sector_number_b = FLASH_SECTOR_1;
+    else { /* Handle other sector mappings if necessary */ return false; }
+    erase_init_b.Sector = sector_number_b;
+    erase_init_b.NbSectors = 1;
+    erase_init_b.Banks = FLASH_BANK_1; // Adjust if using multiple banks
+
+    status = HAL_FLASHEx_Erase(&erase_init_b, &sector_error);
     if (status != HAL_OK) {
         HAL_FLASH_Lock();
         return false;
@@ -363,11 +378,13 @@ bool storage_backend_wipe(void) {
 
     // Lock flash
     status = HAL_FLASH_Lock();
-    if (status != HAL_OK) return false;
+    if (status != HAL_OK) {
+        return false;
+    }
 
     // Reset internal state to reflect empty storage
-    g_storage_initialized = false; // Mark as uninitialized to force re-initialization
-    storage_backend_init(); // Re-initialize to set up empty state
+    g_storage_initialized = false; // Mark as uninitialized to force re-initialization on next call
+    // storage_backend_init(); // Re-initialize to set up empty state (optional, depends on desired behavior)
 
     return true;
 }
