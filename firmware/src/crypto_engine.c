@@ -148,35 +148,8 @@ static bool crypto_engine_ready_for_sensitive_ops(void) {
 }
 
 
-void crypto_engine_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]) {
-  if (out_hash == NULL) {
-    return;
-  }
-  memset(out_hash, 0, 32);
-
-#if FIRMWARE_PRODUCTION
-  // In production, if ATECC is not available, hashing cannot be performed securely.
-  // We call the global Error_Handler() for fatal errors.
-  // `atecc608a_sha256` handles its own checks for device availability.
-  if (!atecc608a_is_available()) {
-    Error_Handler(); // Call global Error_Handler if ATECC is not available.
-    return;
-  }
-  // In production, use ATECC608A for SHA-256 hashing if available via the driver.
-  // The `atecc608a_sha256` function is assumed from the `atecc608a_driver.h`.
-  atecc608a_sha256(data, data_len, out_hash);
-#else
-  // Fallback to software SHA256 for development builds.
-  // This uses the internal static placeholder function if atecc608a_sha256 is not defined.
-  // If this is a real stub build during compilation, this would naturally use the stub's implementation.
-  atecc608a_sha256(data, data_len, out_hash); // Calls our static placeholder or actual ATECC driver.
-#endif
-}
-
 static void next_password_aad(uint8_t aad_out[12]) {
   // This function is for constructing an AAD for password encryption.
-  // In ATECC, the nonce should ideally be generated internally by the hardware for true uniqueness.
-  // However, if the crypto_engine_encrypt_aead API takes an AAD, we must provide one.
   // We combine a simple monotonic counter (host-side) with a portion of the device secret.
   // This provides some entropy and ensures different passwords (or same password encrypted at different times)
   // will have different AADs.
@@ -187,8 +160,6 @@ static void next_password_aad(uint8_t aad_out[12]) {
   memset(combined_seed, 0, sizeof(combined_seed));
 
   // Mix monotonic counter (4 bytes)
-  // Note: g_password_encryption_aad_counter should ideally be persistent across reboots/power cycles
-  // if unique AADs are strictly required globally. For simplicity here, it's RAM-based.
   memcpy(combined_seed, &g_password_encryption_aad_counter, sizeof(g_password_encryption_aad_counter));
   g_password_encryption_aad_counter++; // Increment for the next use
 
@@ -198,8 +169,6 @@ static void next_password_aad(uint8_t aad_out[12]) {
     // Check for ATECC availability and read the component
     if (atecc608a_is_available() && atecc608a_read_slot(ATECC608A_SLOT_DEVICE_SECRET, device_secret_component, sizeof(device_secret_component))) {
         // Overlay the secret component into the combined_seed after the counter.
-        // Current size of combined_seed used is 4 bytes (counter) + 8 bytes (secret component) = 12 bytes.
-        // Ensure this doesn't overflow combined_seed buffer.
         size_t current_seed_len = sizeof(g_password_encryption_aad_counter);
         memcpy(combined_seed + current_seed_len, device_secret_component, sizeof(device_secret_component));
         security_secure_zero(device_secret_component, sizeof(device_secret_component)); // Zeroize sensitive data
@@ -212,7 +181,7 @@ static void next_password_aad(uint8_t aad_out[12]) {
         return;
 #else
         // In dev, if device secret not read, proceed with just counter (less secure AAD).
-        printf("WARNING: Device secret not available or readable for AAD generation in dev mode.\n");
+        // printf("WARNING: Device secret not available or readable for AAD generation in dev mode.\n"); // Re-add if debugging
 #endif
     }
   } else {
@@ -224,10 +193,9 @@ static void next_password_aad(uint8_t aad_out[12]) {
     return;
 #else
     // In dev mode, proceed with just counter (less secure AAD).
-    printf("WARNING: Device secret not provisioned for AAD generation in dev mode.\n");
+    // printf("WARNING: Device secret not provisioned for AAD generation in dev mode.\n"); // Re-add if debugging
 #endif
   }
-
 
   // Hash the combined seed using the crypto engine's SHA256 (ATECC or software fallback)
   crypto_engine_hash256(combined_seed, sizeof(combined_seed), hash_output);
@@ -244,30 +212,25 @@ void crypto_engine_init(void) {
     memset(&g_crypto_state, 0, sizeof(g_crypto_state));
     g_crypto_state.initialized = true;
 
-    // Initialize hardware drivers
-    spi_hal_init(); // Assuming this initializes SPI for ATECC communication
-    // Initialize hardware drivers
-    spi_hal_init(); // Assuming this initializes SPI for ATECC communication
+    // Initialize `spi_hal` once (assuming it's for ATECC comms or general platform SPI)
+    spi_hal_init();
     atecc608a_init(); // Initialize the ATECC608A driver routines
 
     // Check if the secure element is present and functional by running self-test.
-    // The `atecc608a_self_test()` function implicitly checks `g_device_initialized`.
     if (atecc608a_self_test()) {
         g_crypto_state.secure_element_available = true;
-        // Further checks for key provisioning status can be done here if needed
     } else {
         g_crypto_state.secure_element_available = false;
 #if FIRMWARE_PRODUCTION
-        // In production, failure to initialize secure element is a critical error.
-        Error_Handler(); // This should lead to an unrecoverable state/lockout.
+        Error_Handler(); // Critical failure for production.
 #else
-        printf("ATECC608A not available or self-test failed. Proceeding in development mode (with potential fallback to software crypto).\n");
+        // In development, allow proceeding without secure element, possibly with software fallbacks.
+        // printf("ATECC608A not available or self-test failed. Proceeding in development mode (with potential fallback to software crypto).\n");
 #endif
     }
 
-    // Update provisioning status based on actual ATECC state
-    // These calls are fine even if secure_element_available is false,
-    // as atecc608a_is_slot_provisioned will handle it internally (e.g., return false).
+    // Update provisioning status based on actual ATECC state.
+    // If ATECC is not available, these will return false from `atecc608a_is_slot_provisioned`.
     g_crypto_state.master_key_provisioned = atecc608a_is_slot_provisioned(ATECC608A_SLOT_MASTER_KEY);
     g_crypto_state.device_secret_provisioned = atecc608a_is_slot_provisioned(ATECC608A_SLOT_DEVICE_SECRET);
 }
@@ -564,8 +527,7 @@ bool crypto_engine_ecdsa_verify(const uint8_t *public_key,    // Public key byte
     return false;
   }
   // Use ATECC608A for ECDSA verification.
-  // The `public_key` here is assumed to be the actual public key bytes for verification against.
-  // The `atecc608a_ecdsa_verify` function's signature is simplified to match common ATECC library calls.
+  // The `atecc608a_ecdsa_verify` function signature is simplified. We must match that.
   return atecc608a_ecdsa_verify(public_key, message_hash, signature);
 #else
   // Fallback for testing/development. Call stub with appropriate args.
@@ -576,7 +538,7 @@ bool crypto_engine_ecdsa_verify(const uint8_t *public_key,    // Public key byte
 #endif
 }
 
-bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_len) { // private_key_len argument removed to match driver
+bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_len) {
 #if FIRMWARE_PRODUCTION
   // In production, ensure ATECC is available and ready for ECC key generation.
   if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_ECC_GENERATE)) {
@@ -589,14 +551,14 @@ bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_le
   return atecc608a_generate_ec_keypair(ATECC608A_SLOT_FIDO_PRIVKEY_BASE, public_key);
 #else
   // Fallback for testing/development. Call stub with dummy private key args.
-  uint8_t dummy_private_key[32];
+  uint8_t dummy_private_key[32]; // Stub assumes a 32-byte private key internally if needed.
   bool result = crypto_stub_generate_ec_keypair(public_key, public_key_len, dummy_private_key, sizeof(dummy_private_key));
   security_secure_zero(dummy_private_key, sizeof(dummy_private_key)); // Zeroize just in case.
   return result;
 #endif
 }
 
-bool crypto_engine_ecdsa_sign(const uint8_t key_slot_id, // Changed to key_slot_id
+bool crypto_engine_ecdsa_sign(uint8_t key_slot_id,
                               const uint8_t *message, size_t message_len,
                               uint8_t *signature, size_t signature_len) {
 #if FIRMWARE_PRODUCTION

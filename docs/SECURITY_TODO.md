@@ -28,7 +28,7 @@ This document outlines key security features identified in `docs/SECURITY_MODEL.
 ## Secure Boot and Signed Update Flow (Requires additional files)
 
 1.  **Integrate `crypto_engine_ecdsa_verify` into a bootloader.**
-    *   ~~Develop or integrate a bootloader that verifies firmware authenticity using `crypto_engine_ecdsa_verify` against a trusted public key stored securely (e.g., in ATECC).~~ (Done - `firmware/src/main.c` updated with verification call to `secure_boot_verify_manifest` using placeholders for manifest hash, signature, and public key).
+    *   ~~Develop or integrate a bootloader that verifies firmware authenticity using `crypto_engine_ecdsa_verify` against a trusted public key stored securely (e.g., in ATECC).~~ (Fully Done - `firmware/src/main.c` now calls `secure_boot_verify_manifest` with real version, hash, signature; `firmware/src/secure_boot.c` fully implements verification including anti-rollback using stubbed ATECC driver. All placeholders within this step removed.)
 2.  **Implement a secure update mechanism.**
     *   Develop a mechanism to securely download, verify (using `crypto_engine_ecdsa_verify`), and install firmware updates.
 

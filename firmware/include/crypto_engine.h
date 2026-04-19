@@ -112,13 +112,5 @@ bool crypto_engine_ecdsa_sign(const uint8_t key_slot_id, // Changed to key_slot_
                               const uint8_t *message, size_t message_len,
                               uint8_t *signature, size_t signature_len);
 
-/**
- * @brief Computes the SHA-256 hash of the given data.
- *
- * @param data The input data.
- * @param data_len Length of the input data.
- * @param out_hash Buffer to store the 32-byte SHA-256 hash.
- */
-void crypto_engine_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]);
 
 #endif /* CRYPTO_ENGINE_H */
