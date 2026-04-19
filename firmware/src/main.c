@@ -150,14 +150,21 @@ int main(void) {
     // In a real bootloader, the manifest hash, signature, and new firmware version would be read from
     // a dedicated flash region or from parsed manifest data.
     // For this placeholder, we use a dummy version (e.g., 1) for the new firmware.
-    if (!secure_boot_verify_manifest(1, // Placeholder for new firmware version
+    // --- Secure Boot Verification ---
+    // This initial step verifies the authenticity of the loaded firmware manifest.
+    // In a real bootloader, the `firmware_version`, `manifest_hash`, `signature`, and `public_key`
+    // would be loaded from dedicated flash regions or internal memory.
+    uint32_t real_firmware_version = 1; // Example: firmware version is 1
+    secure_boot_result_t verification_result; // To store detailed results
+
+    if (!secure_boot_verify_manifest(real_firmware_version,
                                      k_firmware_manifest_hash, 
                                      sizeof(k_firmware_manifest_hash),
                                      k_firmware_signature, 
                                      sizeof(k_firmware_signature),
                                      k_trusted_firmware_public_key, 
                                      sizeof(k_trusted_firmware_public_key),
-                                     NULL)) { // Pass NULL for out_result for now, or define a local result var.
+                                     &verification_result)) { // Pass address of local result structure
         Error_Handler(); // Firmware verification failed, halt device.
     }
     // --- End Secure Boot Verification ---

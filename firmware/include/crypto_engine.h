@@ -81,9 +81,6 @@ bool crypto_engine_ecdsa_verify(const uint8_t *public_key,
                                 const uint8_t *signature,
                                 size_t signature_len);
 
-// Function to compute SHA-256 hash.
-void crypto_engine_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]);
-
 /* ATECC608A specific read/write slot functions */
 bool crypto_engine_read_atecc_slot(uint8_t slot_id, uint8_t *data, size_t data_len);
 bool crypto_engine_write_atecc_slot(uint8_t slot_id, const uint8_t *data, size_t data_len);
