@@ -41,7 +41,7 @@ bool atecc608a_init(void) {
     g_atecc_self_test_passed = false; // Self-test needs to be run separately.
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Initializing...\n");
+    // printf("ATECC608A: Initializing...\n"); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -55,7 +55,7 @@ bool atecc608a_self_test(void) {
     g_atecc_self_test_passed = true;
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performing self-test...\n");
+    // printf("ATECC608A: Performing self-test...\n"); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -80,7 +80,7 @@ bool atecc608a_write_slot(uint8_t slot_idx, const uint8_t *data, size_t len) {
     g_atecc_slots_provisioned[slot_idx] = true; // Mark as provisioned after write.
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Wrote %zu bytes to slot %u.\n", len, slot_idx);
+    // printf("ATECC608A: Wrote %zu bytes to slot %u.\n", len, slot_idx); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -99,7 +99,7 @@ bool atecc608a_read_slot(uint8_t slot_idx, uint8_t *data, size_t len) {
     memcpy(data, g_atecc_slot_data[slot_idx], len);
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Read %zu bytes from slot %u.\n", len, slot_idx);
+    // printf("ATECC608A: Read %zu bytes from slot %u.\n", len, slot_idx); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -114,7 +114,7 @@ bool atecc608a_bind_slot(uint8_t slot_idx) {
     if (!g_atecc_slots_provisioned[slot_idx]) {
         g_atecc_slots_provisioned[slot_idx] = true; // Simulate binding by marking as provisioned.
 #if !FIRMWARE_PRODUCTION
-        printf("ATECC608A: Bound slot %u.\n", slot_idx);
+        // printf("ATECC608A: Bound slot %u.\n", slot_idx); // Removed printf for code hygiene
 #endif
     }
     return true;
@@ -141,7 +141,7 @@ bool atecc608a_sha256(const uint8_t *data, size_t len, uint8_t *digest) {
     memcpy(digest, &h, sizeof(h)); // Copy the 32-bit hash into the first 4 bytes.
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed SHA256 hash.\n");
+    // printf("ATECC608A: Performed SHA256 hash.\n"); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -187,7 +187,7 @@ bool atecc608a_encrypt_aead(uint8_t key_slot,
     security_secure_zero(tag_input, sizeof(tag_input));
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed AEAD encryption (simulated).\n");
+    // printf("ATECC608A: Performed AEAD encryption (simulated).\n"); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -242,7 +242,7 @@ bool atecc608a_decrypt_aead(uint8_t key_slot,
     security_secure_zero(calculated_tag, sizeof(calculated_tag));
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed AEAD decryption (simulated).\n");
+    // printf("ATECC608A: Performed AEAD decryption (simulated).\n"); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -279,7 +279,7 @@ bool atecc608a_derive_key_slot_and_output(uint8_t parent_key_slot,
     security_secure_zero(hash_output, sizeof(hash_output));
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed KDF (simulated) to output %zu bytes.\n", copy_len);
+    // printf("ATECC608A: Performed KDF (simulated) to output %zu bytes.\n", copy_len); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -299,7 +299,7 @@ bool atecc608a_derive_key_slot(uint8_t parent_key_slot,
         if (atecc608a_write_slot(derived_key_slot, derived_key, sizeof(derived_key))) {
             security_secure_zero(derived_key, sizeof(derived_key));
 #if !FIRMWARE_PRODUCTION
-            printf("ATECC608A: Performed KDF and wrote result to slot %u.\n", derived_key_slot);
+            // printf("ATECC608A: Performed KDF and wrote result to slot %u.\n", derived_key_slot); // Removed printf for code hygiene
 #endif
             return true;
         }
@@ -330,7 +330,7 @@ bool atecc608a_generate_ec_keypair(uint8_t key_slot, uint8_t *public_key) {
     g_atecc_slots_provisioned[key_slot] = true;
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Generated ECC key pair in slot %u (simulated).\n", key_slot);
+    // printf("ATECC608A: Generated ECC key pair in slot %u (simulated).\n", key_slot); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -352,7 +352,7 @@ bool atecc608a_ecdsa_sign(uint8_t key_slot, const uint8_t *digest, uint8_t *sign
     }
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed ECDSA sign (simulated) using slot %u.\n", key_slot);
+    // printf("ATECC608A: Performed ECDSA sign (simulated) using slot %u.\n", key_slot); // Removed printf for code hygiene
 #endif
     return true;
 }
@@ -379,7 +379,7 @@ bool atecc608a_ecdsa_verify(const uint8_t *public_key, const uint8_t *digest, co
     }
 
 #if !FIRMWARE_PRODUCTION
-    printf("ATECC608A: Performed ECDSA verify (simulated).\n");
+    // printf("ATECC608A: Performed ECDSA verify (simulated).\n"); // Removed printf for code hygiene
 #endif
     return signature_is_non_zero; // Return true if signature is not all zeros (basic check).
 }

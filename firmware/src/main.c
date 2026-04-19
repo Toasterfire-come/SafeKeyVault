@@ -21,8 +21,13 @@ static device_context_t g_device_ctx;
 static runtime_settings_t g_runtime_settings;
 static totp_store_t g_totp_store;
 
+// --- Placeholder for Secure Boot Data ---
+// In a real bootloader, these would be loaded from secure storage or flash.
+// They represent the manifest hash, signature, and the trusted public key
+// used to verify the authenticity of the firmware image.
+// These are placeholders and MUST be replaced with actual secure values.
+
 // Placeholder for a trusted public key (e.g., from ATECC or fused) used for firmware verification.
-// In a real bootloader, this would be retrieved from secure storage/fuses.
 // Assuming P256 public key format (64 bytes).
 static const uint8_t k_trusted_firmware_public_key[64] = {
     0x02, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
@@ -31,12 +36,13 @@ static const uint8_t k_trusted_firmware_public_key[64] = {
     0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F
 };
 
-// Placeholder for simulated firmware manifest and signature.
-// In a real scenario, these would be read from flash memory.
+// Placeholder for simulated firmware manifest hash (e.g., SHA256).
 static const uint8_t k_firmware_manifest_hash[32] = {
     0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
     0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F
 };
+
+// Placeholder for simulated firmware signature (e.g., ECDSA P256).
 static const uint8_t k_firmware_signature[64] = {
     0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
     0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
@@ -45,25 +51,14 @@ static const uint8_t k_firmware_signature[64] = {
 };
 
 
-// A simple in-memory representation of credentials for demonstration.
-// In a real application, these would be loaded from secure storage.
-#define MAX_IN_MEMORY_CREDENTIALS 5
-static credential_record_t g_credentials[MAX_IN_MEMORY_CREDENTIALS] = {0};
-static size_t g_credential_count = 0; // The number of actual credentials stored
-
 // Placeholder for a function to get the pending credential and origin for typing
 // This needs to be implemented based on how the state machine manages pending actions.
 bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t *out_credential, char *out_origin, size_t origin_len) {
-    if (ctx->state == DEVICE_CONFIRM_TYPE && ctx->selected_credential_idx < g_credential_count) {
-        if (out_credential != NULL) {
-            *out_credential = g_credentials[ctx->selected_credential_idx];
-        }
-        if (out_origin != NULL) {
-            strncpy(out_origin, g_credentials[ctx->selected_credential_idx].origin, origin_len - 1);
-            out_origin[origin_len - 1] = '\0';
-        }
-        return true;
-    }
+    // This is a placeholder. In a real system, the state machine would track the pending fill action.
+    // For this demonstration, we use a simple in-memory credential storage.
+    // REMOVED: Logic related to `s_credentials_in_memory` and `s_credential_count`.
+    // This function should be implemented to retrieve pending actions from the state machine's context.
+    // For now, it returns false, indicating no pending action.
     return false;
 }
 
@@ -71,11 +66,6 @@ bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t
 extern void state_machine_on_usb_connect(device_context_t *ctx);
 extern void state_machine_on_usb_disconnect(device_context_t *ctx); // Assuming this new function handles disconnect
 extern void update_led_state(device_context_t *ctx, uint32_t current_tick);
-
-// In-memory placeholder for credentials (will be loaded from secure storage)
-#define MAX_CREDENTIALS_IN_MEMORY 5
-static credential_record_t s_credentials_in_memory[MAX_CREDENTIALS_IN_MEMORY] = {0};
-static size_t s_credential_count = 0; // Number of credentials currently loaded from storage
 
 // Dummy implementations for HAL functions required by the framework
 // These would be provided by STM32CubeMX generated code
@@ -105,19 +95,13 @@ void Error_Handler(void) {
 
 
 // Function to get the pending credential and origin for typing
+// This is a placeholder. In a real system, the state machine would track the pending fill action.
 bool state_machine_get_pending_action(device_context_t *ctx, credential_record_t *out_credential, char *out_origin, size_t origin_len) {
     // This is a placeholder. In a real system, the state machine would track the pending fill action.
     // For this demonstration, we use a simple in-memory credential storage.
-    if (ctx->state == DEVICE_CONFIRM_TYPE && ctx->selected_credential_idx < s_credential_count) {
-        if (out_credential != NULL) {
-            *out_credential = s_credentials_in_memory[ctx->selected_credential_idx];
-        }
-        if (out_origin != NULL) {
-            strncpy(out_origin, s_credentials_in_memory[ctx->selected_credential_idx].origin, origin_len - 1);
-            out_origin[origin_len - 1] = '\0';
-        }
-        return true;
-    }
+    // REMOVED: Logic related to `s_credentials_in_memory` and `s_credential_count`.
+    // This function should be implemented to retrieve pending actions from the state machine's context.
+    // For now, it returns false, indicating no pending action.
     return false;
 }
 
@@ -144,12 +128,6 @@ bool usb_session_type_credentials(const credential_record_t *record, const char 
 
 // Main firmware entry point
 int main(void) {
-    // --- Secure Boot Verification ---
-    // This initial step verifies the authenticity of the loaded firmware manifest
-    // using the trusted public key. If verification fails, the device halts.
-    // In a real bootloader, the manifest hash, signature, and new firmware version would be read from
-    // a dedicated flash region or from parsed manifest data.
-    // For this placeholder, we use a dummy version (e.g., 1) for the new firmware.
     // --- Secure Boot Verification ---
     // This initial step verifies the authenticity of the loaded firmware manifest.
     // In a real bootloader, the `firmware_version`, `manifest_hash`, `signature`, and `public_key`
