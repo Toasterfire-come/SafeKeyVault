@@ -5,148 +5,86 @@
 #include <stdint.h>
 #include <string.h>
 
-static uint8_t g_master_key[32];
-static size_t g_master_key_len = 0u;
+#include "crypto_engine.h" // Include the real crypto engine APIs
+#include "security_utils.h" // For security_secure_zero
+
+/**
+ * @brief This module provides stub implementations for cryptographic functions.
+ *        These stubs are used primarily for host tests and development builds
+ *        where a hardware secure element (like ATECC608A) is not available.
+ *        In production firmware, these calls are replaced by direct interactions
+ *        with the secure element via the `crypto_engine` functions.
+ *
+ *        The functions here now largely delegate to the `crypto_engine` APIs,
+ *        assuming the `crypto_engine` itself will provide the necessary
+ *        software fallbacks or be mocked for testing purposes.
+ */
+
 
 void crypto_stub_set_master_key(const uint8_t *key, size_t key_len) {
-  if (key == NULL || key_len == 0u) {
-    g_master_key_len = 0u;
-    memset(g_master_key, 0, sizeof(g_master_key));
-    return;
-  }
-  if (key_len > sizeof(g_master_key)) {
-    key_len = sizeof(g_master_key);
-  }
-  memcpy(g_master_key, key, key_len);
-  g_master_key_len = key_len;
+  // In a production system utilizing ATECC, the master key is provisioned
+  // directly into the ATECC and not handled explicitly by software this way.
+  // This stub function is primarily for older test patterns or scenarios
+  // where a software-managed master key might still be used in dev builds.
+  // For the updated design, this would essentially be a no-op or would
+  // simulate setting up a software key for fallback operations within crypto_engine.
+  (void)key; // Suppress unused parameter warning
+  (void)key_len; // Suppress unused parameter warning
 }
 
 bool crypto_stub_encrypt_password(const char *plaintext, char *ciphertext_out, size_t out_len) {
-  size_t i;
-  if (plaintext == NULL || ciphertext_out == NULL || out_len == 0u) {
-    return false;
-  }
-  ciphertext_out[0] = '\0';
-  // For tests, operate even without a configured key. Use a default if none set.
-  if (g_master_key_len == 0u) {
-    const uint8_t default_key[32] = {0x5A}; // Use a single byte default key
-    crypto_stub_set_master_key(default_key, sizeof(default_key));
-  }
-  for (i = 0u; plaintext[i] != '\0' && i + 1u < out_len; ++i) {
-    uint8_t p = (uint8_t)plaintext[i];
-    uint8_t k = g_master_key[i % g_master_key_len];
-    ciphertext_out[i] = (char)(p ^ k);
-  }
-  ciphertext_out[i] = '\0';
-  return true;
+  // Delegate to the main crypto engine's password encryption function.
+  // The crypto engine internally handles selecting hardware or software implementation.
+  return crypto_engine_encrypt_password(plaintext, ciphertext_out, out_len);
 }
 
 bool crypto_stub_decrypt_password(const char *ciphertext, char *plaintext_out, size_t out_len) {
-  size_t i;
-  if (ciphertext == NULL || plaintext_out == NULL || out_len == 0u) {
-    return false;
-  }
-  plaintext_out[0] = '\0';
-  // For tests, operate even without a configured key. Use a default if none set.
-  if (g_master_key_len == 0u) {
-    const uint8_t default_key[32] = {0x5A}; // Use a single byte default key
-    crypto_stub_set_master_key(default_key, sizeof(default_key));
-  }
-  for (i = 0u; ciphertext[i] != '\0' && i + 1u < out_len; ++i) {
-    uint8_t c = (uint8_t)ciphertext[i];
-    uint8_t k = g_master_key[i % g_master_key_len];
-    plaintext_out[i] = (char)(c ^ k);
-  }
-  plaintext_out[i] = '\0';
-  return true;
+  // Delegate to the main crypto engine's password decryption function.
+  return crypto_engine_decrypt_password(ciphertext, plaintext_out, out_len);
 }
 
 void crypto_stub_password_fingerprint(const char *password, uint8_t out_fp[16], size_t out_len) {
-  uint32_t h = 2166136261u; // FNV-1a initial hash value
-  size_t i = 0u;
-  if (out_fp == NULL || out_len == 0u) {
-    return;
-  }
-  memset(out_fp, 0, out_len); // Zero out the output buffer
-  if (password == NULL) {
-    return; // No password, return zeroed buffer
-  }
-  while (password[i] != '\0') {
-    h ^= (uint8_t)password[i];
-    h *= 16777619u; // FNV-1a prime
-    // XOR the hash byte into the output buffer to mix it in.
-    // This is a simple mixing, not a cryptographic hash.
-    out_fp[i % out_len] ^= (uint8_t)(h & 0xFFu);
-    i++;
-  }
+  // Delegate to the main crypto engine's password fingerprint function.
+  crypto_engine_password_fingerprint(password, out_fp, out_len);
 }
 
 void crypto_stub_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[16]) {
-  uint32_t h = 2166136261u; // FNV-1a initial hash value
-  size_t i;
-  if (out_fp == NULL) {
-    return;
-  }
-  memset(out_fp, 0, 16u); // Zero out the output buffer
-  if (data == NULL) {
-    return; // No data, return zeroed buffer
-  }
-  for (i = 0u; i < data_len; ++i) {
-    h ^= data[i];
-    h *= 16777619u; // FNV-1a prime
-    // XOR the hash byte into the output buffer to mix it in.
-    // This is a simple mixing, not a cryptographic hash.
-    out_fp[i % 16u] ^= (uint8_t)(h & 0xFFu);
-  }
+  // Delegate to the main crypto engine's hash16 function.
+  crypto_engine_hash16(data, data_len, out_fp);
 }
 
 void crypto_stub_hash256(const uint8_t *data, size_t data_len, uint8_t out_hash[32]) {
-  // Simple stub for SHA-256: FNV-1a type hash, repeated to fill 32 bytes
-  uint32_t h = 2166136261u; // FNV-1a initial hash value
-  size_t i;
-  if (out_hash == NULL) {
-    return;
-  }
-  memset(out_hash, 0, 32u); // Zero out the output buffer
-  if (data == NULL) {
-    return; // No data, return zeroed buffer
-  }
-  for (i = 0u; i < data_len; ++i) {
-    h ^= data[i];
-    h *= 16777619u; // FNV-1a prime
-    // Fill the 32-byte output hash by repeating and mixing the 32-bit FNV-1a hash
-    out_hash[i % 32u] ^= (uint8_t)((h >> ((i % 4) * 8)) & 0xFFu);
-  }
+  // Delegate to the main crypto engine's hash256 function.
+  crypto_engine_hash256(data, data_len, out_hash);
 }
 
 bool crypto_stub_generate_ec_keypair(uint8_t *public_key, size_t public_key_len, uint8_t *private_key, size_t private_key_len) {
-  if (public_key == NULL || private_key == NULL || public_key_len < 64 || private_key_len < 32) {
-    return false;
+  // Delegate to the main crypto engine's keypair generation function.
+  // The `crypto_engine_generate_ec_keypair` no longer accepts `private_key` directly,
+  // as the private key is held securely within the ATECC.
+  // For the stub, we still provide a dummy `private_key` if a caller expects it,
+  // but it's not used by the underlying `crypto_engine` call in its current definition.
+  bool result = crypto_engine_generate_ec_keypair(public_key, public_key_len);
+  if (result && private_key != NULL && private_key_len >= 32) {
+    // Fill `private_key` with dummy data if the stub caller expects it.
+    // In a real secure element context, this would not happen.
+    for (size_t i = 0; i < 32; ++i) {
+      private_key[i] = (uint8_t)(0xDE + i); // Dummy private key material
+    }
+  } else if (private_key != NULL && private_key_len > 0) {
+    security_secure_zero(private_key, private_key_len);
   }
-  // Simulate key generation for P-256
-  // Private key (32 bytes random)
-  // Public key (64 bytes, x and y coordinates)
-  // For stub, just fill with some non-zero data
-  for (size_t i = 0; i < 32; ++i) {
-    private_key[i] = (uint8_t)(0xDE + i);
-  }
-  for (size_t i = 0; i < 64; ++i) {
-    public_key[i] = (uint8_t)(0xAD + i);
-  }
-  return true;
+  return result;
 }
 
-bool crypto_stub_ecdsa_sign(const uint8_t *private_key, size_t private_key_len, const uint8_t *message, size_t message_len, uint8_t *signature, size_t signature_len) {
-  if (private_key == NULL || message == NULL || signature == NULL || private_key_len < 32 || signature_len < 64) {
-    return false;
-  }
-  // Simulate signing by hashing the message and filling the signature with it
-  uint8_t hash_of_message[32];
-  crypto_stub_hash256(message, message_len, hash_of_message);
+bool crypto_stub_ecdsa_sign(const uint8_t *private_key_bytes, size_t private_key_len, const uint8_t *message, size_t message_len, uint8_t *signature, size_t signature_len) {
+  // Delegate to the main crypto engine's signing function.
+  // The `crypto_engine_ecdsa_sign` now expects a `key_slot_id` not raw private key bytes.
+  // For the stub, we will use a specific ATECC slot ID for signing.
+  (void)private_key_bytes; // Unused in this new delegation model
+  (void)private_key_len;   // Unused
 
-  // Use the hash as a dummy signature (first 32 bytes as R, second 32 as S)
-  memcpy(signature, hash_of_message, 32);
-  memcpy(signature + 32, hash_of_message, 32); // Repeat to fill 64 bytes
-  security_secure_zero(hash_of_message, sizeof(hash_of_message));
-  return true;
+  // Using a predefined slot ID for signing in stub/test environments.
+  // ATECC608A_SLOT_SIGNING_PRIVKEY should be defined in `atecc608a_driver.h` or similar.
+  return crypto_engine_ecdsa_sign(ATECC608A_SLOT_SIGNING_PRIVKEY, message, message_len, signature, signature_len);
 }
