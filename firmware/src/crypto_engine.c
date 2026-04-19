@@ -1,7 +1,5 @@
 #include "crypto_engine.h"
 
-#include "crypto_engine.h"
-
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -137,10 +135,7 @@ static bool crypto_engine_ready_for_sensitive_ops(void) {
          g_crypto_state.master_key_provisioned &&
          g_crypto_state.device_secret_provisioned;
 #else
-  if (!g_crypto_state.initialized) {
-    crypto_engine_init(); // Initialize if not already done in dev builds
-  }
-  // In non-production, allow more flexibility for testing purposes.
+  // In dev, allow more flexibility for testing purposes.
   // The 'initialized' flag here indicates base readiness, further checks are done per operation
   // for actual ATECC availability if that path is taken.
   return g_crypto_state.initialized;
@@ -181,7 +176,6 @@ static void next_password_aad(uint8_t aad_out[12]) {
         return;
 #else
         // In dev, if device secret not read, proceed with just counter (less secure AAD).
-        // printf("WARNING: Device secret not available or readable for AAD generation in dev mode.\n"); // Re-add if debugging
 #endif
     }
   } else {
@@ -193,7 +187,6 @@ static void next_password_aad(uint8_t aad_out[12]) {
     return;
 #else
     // In dev mode, proceed with just counter (less secure AAD).
-    // printf("WARNING: Device secret not provisioned for AAD generation in dev mode.\n"); // Re-add if debugging
 #endif
   }
 
@@ -225,7 +218,6 @@ void crypto_engine_init(void) {
         Error_Handler(); // Critical failure for production.
 #else
         // In development, allow proceeding without secure element, possibly with software fallbacks.
-        // printf("ATECC608A not available or self-test failed. Proceeding in development mode (with potential fallback to software crypto).\n");
 #endif
     }
 
@@ -374,24 +366,22 @@ static bool crypto_engine_encrypt_aead_with_password_formatting(const char *plai
                                  raw_ciphertext, sizeof(raw_ciphertext), &raw_ciphertext_len, tag);
 #else
   // Fallback for development builds (not secure for production)
-  uint8_t dev_key_stream[64]; // Simple pseudo-random stream expanded using AAD
-  crypto_engine_hash256(aad, sizeof(aad), dev_key_stream); // Hash AAD to create key stream-like data
-  crypto_engine_hash256(dev_key_stream, sizeof(dev_key_stream), dev_key_stream + 32); // Expand further
-
-  // Simulate encryption with XOR (stream cipher using derived key material).
-  for (size_t i = 0; i < plaintext_len; ++i) {
-      raw_ciphertext[i] = plaintext[i] ^ dev_key_stream[i % sizeof(dev_key_stream)];
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  // The original dev fallback was removed.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_AEAD) || !g_crypto_state.master_key_provisioned) {
+      Error_Handler(); // Critical error in production: Secure element or master key not ready for AEAD.
+      return false;
   }
-  raw_ciphertext_len = plaintext_len;
-  
-  // Simulate tag generation (HMAC-like, but just SHA256 of ciphertext + AAD for simplicity in dev)
-  uint8_t tag_input_data[sizeof(aad) + raw_ciphertext_len];
-  memcpy(tag_input_data, aad, sizeof(aad));
-  memcpy(tag_input_data + sizeof(aad), raw_ciphertext, raw_ciphertext_len);
-  crypto_engine_hash256(tag_input_data, sizeof(tag_input_data), tag); // Use first 16 bytes of SHA256 as tag
-  security_secure_zero(tag_input_data, sizeof(tag_input_data)); // Zeroize sensitive intermediate data
-  
-  success = true;
+  // If ATECC is available, use it.
+  success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Master key handle/slot
+                                   plaintext, plaintext_len,
+                                   aad, sizeof(aad),
+                                   NULL, 0, // Nonce and nonce_len are handled by ATECC driver internally or are static for this operation.
+                                   raw_ciphertext, sizeof(raw_ciphertext), &raw_ciphertext_len, tag);
 #endif
 
   if (!success) {
@@ -472,12 +462,29 @@ void crypto_engine_password_fingerprint(const char *password,
   }
   security_secure_zero(password_hash_input, sizeof(password_hash_input));
 #else
-  // Software fallback for development builds (not production secure)
-  // Uses SHA256 and truncates for testing purposes.
-  uint8_t sha_hash[32];
-  crypto_engine_hash256((const uint8_t*)password, strlen(password), sha_hash);
-  memcpy(out_fp, sha_hash, (out_len < 16) ? out_len : 16); // Truncate or copy fully
-  security_secure_zero(sha_hash, sizeof(sha_hash));
+  // Fallback for development builds (not production secure)
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_KDF) || !g_crypto_state.device_secret_provisioned) {
+      Error_Handler(); // Critical: Secure element not ready or not provisioned for production KDF operations.
+      security_secure_zero(out_fp, out_len < 16 ? out_len : 16);
+      return;
+  }
+  // If ATECC is available, use it.
+  uint8_t password_hash_input[32];
+  crypto_engine_hash256((const uint8_t*)password, strlen(password), password_hash_input);
+  if (atecc608a_derive_key_slot_and_output(ATECC608A_SLOT_DEVICE_SECRET, // Base key for KDF from device secret
+                                            password_hash_input, sizeof(password_hash_input), // Hashed password as KDF input
+                                            out_fp, (out_len < 16) ? out_len : 16)) { // Output fingerprint
+    // Success. Fingerprint is in out_fp.
+  } else {
+    Error_Handler(); // ATECC KDF failed.
+    security_secure_zero(out_fp, (out_len < 16) ? out_len : 16);
+  }
+  security_secure_zero(password_hash_input, sizeof(password_hash_input));
 #endif
 }
 
@@ -499,17 +506,21 @@ void crypto_engine_hash16(const uint8_t *data, size_t data_len, uint8_t out_fp[1
   memcpy(out_fp, hash_full, 16); // Truncate SHA256 to 16 bytes for hash16
   security_secure_zero(hash_full, sizeof(hash_full)); // Zeroize sensitive intermediate data
 #else
-  // Fallback in development uses a simple FNV-1a like hash for testing.
-  uint32_t h = 2166136261u; // FNV-1a initial hash value
-  size_t i;
-  if (data == NULL) { // Already zeroed out_fp above if data is NULL, just return.
+  // Fallback for development builds (not production secure)
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available()) {
+    Error_Handler(); // Critical error in production: Secure element not available.
     return;
   }
-  for (i = 0u; i < data_len; ++i) {
-    h ^= data[i];
-    h *= 16777619u; // FNV-1a prime
-    out_fp[i % 16u] ^= (uint8_t)(h & 0xFFu); // Mix hash bytes into output.
-  }
+  // If ATECC is available, use it.
+  uint8_t hash_full[32];
+  atecc608a_sha256(data, data_len, hash_full); // Assuming this function is implemented in atecc driver
+  memcpy(out_fp, hash_full, 16); // Truncate SHA256 to 16 bytes for hash16
+  security_secure_zero(hash_full, sizeof(hash_full)); // Zeroize sensitive intermediate data
 #endif
 }
 
@@ -530,11 +541,18 @@ bool crypto_engine_ecdsa_verify(const uint8_t *public_key,    // Public key byte
   // The `atecc608a_ecdsa_verify` function signature is simplified. We must match that.
   return atecc608a_ecdsa_verify(public_key, message_hash, signature);
 #else
-  // Fallback for testing/development. Call stub with appropriate args.
-  // Note: crypto_stub_ecdsa_verify function signature needs to match.
-  // The stub's `private_key` parameter (which is a dummy) is not relevant for verification,
-  // so we pass `NULL` or a dummy for stub consistency if it expects it.
-  return crypto_stub_ecdsa_verify(public_key, public_key_len, NULL, 0, message_hash, message_hash_len, signature, signature_len);
+  // Fallback for testing/development
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_ECDSA_VERIFY)) {
+    Error_Handler(); // Critical error in production: Secure element not ready for ECDSA verification.
+    return false;
+  }
+  // If ATECC is available, use it.
+  return atecc608a_ecdsa_verify(public_key, message_hash, signature);
 #endif
 }
 
@@ -550,11 +568,18 @@ bool crypto_engine_generate_ec_keypair(uint8_t *public_key, size_t public_key_le
   // The `atecc608a_generate_ec_keypair` function signature is simplified.
   return atecc608a_generate_ec_keypair(ATECC608A_SLOT_FIDO_PRIVKEY_BASE, public_key);
 #else
-  // Fallback for testing/development. Call stub with dummy private key args.
-  uint8_t dummy_private_key[32]; // Stub assumes a 32-byte private key internally if needed.
-  bool result = crypto_stub_generate_ec_keypair(public_key, public_key_len, dummy_private_key, sizeof(dummy_private_key));
-  security_secure_zero(dummy_private_key, sizeof(dummy_private_key)); // Zeroize just in case.
-  return result;
+  // Fallback for testing/development
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_ECC_GENERATE)) {
+    Error_Handler(); // Critical error in production: Secure element not ready for ECC key generation.
+    return false;
+  }
+  // If ATECC is available, use it.
+  return atecc608a_generate_ec_keypair(ATECC608A_SLOT_FIDO_PRIVKEY_BASE, public_key);
 #endif
 }
 
@@ -578,14 +603,22 @@ bool crypto_engine_ecdsa_sign(uint8_t key_slot_id,
   security_secure_zero(message_hash, sizeof(message_hash));
   return success;
 #else
-  // Fallback for testing/development. Call stub with dummy private key based on slot_id.
-  uint8_t dummy_private_key[32]; // Simulate a private key based on slot_id if needed by stub.
-  for (size_t i = 0; i < sizeof(dummy_private_key); ++i) {
-      dummy_private_key[i] = (uint8_t)(key_slot_id + i); // Simple unique dummy for stub
+  // Fallback for testing/development
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_ECDSA_SIGN)) {
+    Error_Handler(); // Critical error in production: Secure element not ready for ECDSA signing.
+    return false;
   }
-  bool result = crypto_stub_ecdsa_sign(dummy_private_key, sizeof(dummy_private_key), message, message_len, signature, signature_len);
-  security_secure_zero(dummy_private_key, sizeof(dummy_private_key));
-  return result;
+  // If ATECC is available, use it.
+  uint8_t message_hash[32];
+  crypto_engine_hash256(message, message_len, message_hash); // Hash message before signing
+  bool success = atecc608a_ecdsa_sign(key_slot_id, message_hash, signature);
+  security_secure_zero(message_hash, sizeof(message_hash));
+  return success;
 #endif
 }
 
@@ -607,7 +640,17 @@ void crypto_engine_hash256(const uint8_t *data, size_t data_len, uint8_t out_has
 #else
   // Fallback to software SHA256 for development builds.
   // This uses the internal static placeholder function if atecc608a_sha256 is not defined.
-  atecc608a_sha256(data, data_len, out_hash); // Calls our static placeholder or actual ATECC driver.
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!g_crypto_state.secure_element_available) {
+      Error_Handler(); // Critical error in production: Secure element not available.
+      return;
+  }
+  // If ATECC is available, use it.
+  atecc608a_sha256(data, data_len, out_hash);
 #endif
 }
 
@@ -714,13 +757,20 @@ bool crypto_engine_derive_pin_key(const char *pin,
                                                 out_key, 32); // Output derived 32 bytes
 #else
   // Fallback for development builds (not production secure)
-  // Simple hash-based KDF for dev: Repeated SHA256 to create 32-byte key.
-  uint8_t hash_output_buffer[64]; // Buffer for 2x SHA256 output (32 + 32 bytes)
-  crypto_engine_hash256(mix_input, mix_input_current_len, hash_output_buffer);
-  crypto_engine_hash256(hash_output_buffer, 32, hash_output_buffer + 32); // Hash the first hash to get second 16 bytes
-  memcpy(out_key, hash_output_buffer, 32);
-  security_secure_zero(hash_output_buffer, sizeof(hash_output_buffer)); // Zeroize sensitive intermediate data
-  success = true;
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_KDF) || !g_crypto_state.device_secret_provisioned) {
+      Error_Handler(); // Critical error: Secure element not ready or not provisioned, or KDF not ready.
+      security_secure_zero(mix_input, sizeof(mix_input));
+      return false;
+  }
+  // If ATECC is available, use it.
+  success = atecc608a_derive_key_slot_and_output(ATECC608A_SLOT_DEVICE_SECRET, // Slot holding the base key for KDF
+                                                mix_input, mix_input_current_len, // Input data (PIN + secret + salt)
+                                                out_key, 32); // Output derived 32 bytes
 #endif
 
   security_secure_zero(mix_input, sizeof(mix_input)); // Zeroize input to KDF
@@ -766,35 +816,23 @@ bool crypto_engine_encrypt_aead(const uint8_t *plaintext,
                                    aad, aad_len,
                                    NULL, 0, // Nonce and nonce_len are handled by ATECC driver internally or are static for this operation.
                                    ciphertext, ciphertext_capacity, ciphertext_len, out_tag);
-#else // Development/non-production build
-  // Fallback for development builds (not secure for production).
-  // This is a simple XOR-based "stream cipher" combined with a hash for a tag.
-  // It's purely for functional testing, NOT cryptographic security.
-  // Note: crypto_engine_hash256 currently uses ATECC in production mode.
-  uint8_t dev_key_stream[64]; // Pseudo-random stream expanded using AAD
-  crypto_engine_hash256(aad, aad_len, dev_key_stream);
-  crypto_engine_hash256(dev_key_stream, sizeof(dev_key_stream), dev_key_stream + 32); // Expand key stream
-
-  for (size_t i = 0u; i < plaintext_len && i < ciphertext_capacity; ++i) {
-      ciphertext[i] = plaintext[i] ^ dev_key_stream[i % sizeof(dev_key_stream)];
+#else
+  // Fallback for development builds (not secure for production)
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_AEAD) || !g_crypto_state.master_key_provisioned) {
+      Error_Handler(); // Critical error in production: Secure element or master key not ready for AEAD.
+      return false;
   }
-  *ciphertext_len = plaintext_len; // In this simple emulation, ciphertext length equals plaintext length.
-
-  // Simulate tag generation (HMAC-like, but just SHA256 of AAD || ciphertext for simplicity in dev).
-  uint8_t tag_input_buffer[aad_len + *ciphertext_len];
-  if (aad != NULL && aad_len > 0) {
-      memcpy(tag_input_buffer, aad, aad_len);
-  }
-  memcpy(tag_input_buffer + aad_len, ciphertext, *ciphertext_len);
-  uint8_t full_tag_hash[32];
-  crypto_engine_hash256(tag_input_buffer, aad_len + *ciphertext_len, full_tag_hash);
-  memcpy(out_tag, full_tag_hash, 16); // Truncate SHA256 to 16 bytes for assumed tag size.
-  
-  // Zeroize sensitive intermediate data.
-  security_secure_zero(dev_key_stream, sizeof(dev_key_stream));
-  security_secure_zero(tag_input_buffer, sizeof(tag_input_buffer));
-  security_secure_zero(full_tag_hash, sizeof(full_tag_hash));
-  success = true;
+  // If ATECC is available, use it.
+  success = atecc608a_encrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Master key handle/slot
+                                   plaintext, plaintext_len,
+                                   aad, aad_len,
+                                   NULL, 0, // Nonce and nonce_len are handled by ATECC driver internally or are static for this operation.
+                                   ciphertext, ciphertext_capacity, ciphertext_len, out_tag);
 #endif
 
   return success;
@@ -839,43 +877,24 @@ bool crypto_engine_decrypt_aead(const uint8_t *ciphertext,
                                    NULL, 0, // Nonce and nonce_len are handled by ATECC driver internally or are static for this operation.
                                    tag, // ATECC driver must verify this tag internally during decryption
                                    plaintext, plaintext_capacity, plaintext_len);
-#else // Development/non-production build
-  // Fallback for development builds (not secure for production).
-  // Inverse of the XOR-based "stream cipher" with hash-based tag verification.
-  uint8_t dev_key_stream[64]; // Pseudo-random stream used for encryption simulation
-  crypto_engine_hash256(aad, aad_len, dev_key_stream);
-  crypto_engine_hash256(dev_key_stream, sizeof(dev_key_stream), dev_key_stream + 32); // Expand key stream
-
-  for (size_t i = 0u; i < ciphertext_len && i < plaintext_capacity; ++i) {
-      plaintext[i] = ciphertext[i] ^ dev_key_stream[i % sizeof(dev_key_stream)];
+#else
+  // Fallback for development builds (not secure for production)
+  // This section is removed as per the request.
+  // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
+  // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
+  // This means in dev mode, if ATECC is not available, this function will error out.
+  // If ATECC is available, it will attempt to use it.
+  if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_AEAD) || !g_crypto_state.master_key_provisioned) {
+      Error_Handler(); // Critical error in production: Secure element or master key not ready for AEAD.
+      return false;
   }
-  *plaintext_len = ciphertext_len; // In this simple emulation, plaintext length equals ciphertext length.
-
-  // Re-calculate the expected tag based on the decrypted plaintext and AAD (for verification)
-  uint8_t calculated_tag_input_buffer[aad_len + *plaintext_len];
-  if (aad != NULL && aad_len > 0) {
-      memcpy(calculated_tag_input_buffer, aad, aad_len);
-  }
-  memcpy(calculated_tag_input_buffer + aad_len, plaintext, *plaintext_len);
-  uint8_t full_calculated_tag_hash[32];
-  crypto_engine_hash256(calculated_tag_input_buffer, aad_len + *plaintext_len, full_calculated_tag_hash);
-  uint8_t expected_tag_from_calc[16];
-  memcpy(expected_tag_from_calc, full_calculated_tag_hash, 16); // Truncate to 16 bytes for tag
-
-  // Verify the tag in constant time to prevent timing attacks.
-  if (!sec_consttime_memeq(expected_tag_from_calc, tag, 16u)) {
-      security_secure_zero(plaintext, plaintext_capacity); // Zeroize plaintext on authentication failure
-      *plaintext_len = 0; // Indicate no plaintext was successfully decrypted
-      success = false;
-  } else {
-      success = true;
-  }
-  
-  // Zeroize sensitive intermediate data.
-  security_secure_zero(dev_key_stream, sizeof(dev_key_stream));
-  security_secure_zero(calculated_tag_input_buffer, sizeof(calculated_tag_input_buffer));
-  security_secure_zero(full_calculated_tag_hash, sizeof(full_calculated_tag_hash));
-  security_secure_zero(expected_tag_from_calc, sizeof(expected_tag_from_calc));
+  // If ATECC is available, use it.
+  success = atecc608a_decrypt_aead(ATECC608A_SLOT_MASTER_KEY, // Master key handle/slot
+                                   ciphertext, ciphertext_len,
+                                   aad, aad_len,
+                                   NULL, 0, // Nonce and nonce_len are handled by ATECC driver internally or are static for this operation.
+                                   tag, // ATECC driver must verify this tag internally during decryption
+                                   plaintext, plaintext_capacity, plaintext_len);
 #endif
 
   if (!success) {
