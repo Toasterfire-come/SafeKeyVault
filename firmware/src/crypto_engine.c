@@ -458,7 +458,7 @@ void crypto_engine_password_fingerprint(const char *password,
   // If FIRMWARE_PRODUCTION is 0, the code will proceed to the ATECC call.
   // If ATECC is not available, `atecc608a_is_available()` will be false, leading to Error_Handler().
   if (!atecc608a_is_available() || !atecc608a_is_ready(CRYPTO_FUNCTION_KDF) || !g_crypto_state.device_secret_provisioned) {
-      Error_Handler(); // Critical: Secure element not ready or not provisioned for production KDF operations.
+      Error_Handler(); // Critical error in production: Secure element not ready or not provisioned for production KDF operations.
       security_secure_zero(out_fp, out_len < 16 ? out_len : 16);
       return;
   }
